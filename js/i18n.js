@@ -53,6 +53,8 @@ window.STRINGS = {
     live: 'LIVE', players: 'PLAYERS', bestToday: 'Best Detectives Today', bestTodayAr: 'أفضل المحققين',
     bestByRole: 'Best by role', prize: 'Top 3 win a Youth Day trophy!', exportCsv: 'Export CSV', resetToday: "Reset today's board",
     sureReset: "Delete all of today's scores on this device?", back: 'Back',
+    home: 'Welcome page', mainMenu: 'Back to welcome page', sureQuit: 'Leave this shift and go back to the welcome page? This game will not be saved.',
+    audioTitle: 'Sound board', music: 'Music', office: 'Office sounds', voices: 'Visitor voices', effects: 'Effects',
     roleNames: { scammer: 'Scammer', attacker: 'Attacker', stealer: 'Stealer', legal: 'Legal' },
     roleWants: {
       scammer: 'To trick the bank or a customer into moving money.',
@@ -118,6 +120,8 @@ window.STRINGS = {
     live: 'LIVE', players: 'PLAYERS', bestToday: 'أفضل المحققين اليوم', bestTodayAr: 'Best Detectives Today',
     bestByRole: 'الأفضل حسب الموقع', prize: 'أول 3 يفوزون بكأس يوم الشباب!', exportCsv: 'تصدير CSV', resetToday: 'مسح لوحة اليوم',
     sureReset: 'تبي تمسح كل نتائج اليوم من هالجهاز؟', back: 'رجوع',
+    home: 'الصفحة الرئيسية', mainMenu: 'رجوع للصفحة الرئيسية', sureQuit: 'تبي تطلع من المناوبة وترجع للصفحة الرئيسية؟ ما بتنحفظ هاللعبة.',
+    audioTitle: 'لوحة الصوت', music: 'الموسيقى', office: 'أصوات المكتب', voices: 'أصوات الزوّار', effects: 'المؤثرات',
     roleNames: { scammer: 'محتال', attacker: 'مخترق', stealer: 'سارق بيانات', legal: 'عميل حقيقي' },
     roleWants: {
       scammer: 'يخدع البنك أو عميل عشان تتحرك الفلوس.',

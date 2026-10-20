@@ -8,6 +8,7 @@ The player signs in with their job title. Visitors then walk up to the counter, 
 - In-person visits at the branch or HQ, plus phone calls, WhatsApp, email and internal chat
 - Up to 6 questions per visitor, words you can tap to flag them, and rubber-stamp verdicts
 - 3 chances, a 5-minute shift and a leaderboard
+- Background music, office sounds (chatter, phones, typing, the queue ding-dong) and spoken visitor voices, all switchable
 - **100% free:** no server, no AI key and no accounts. It runs on GitHub Pages.
 
 ---
@@ -44,10 +45,14 @@ To change something later, edit the file on GitHub (pencil icon) and commit. The
 | Big-screen leaderboard | Open the same link with `?board` at the end, e.g. `…/whos-on-the-line/?board`, on the **same laptop** in a second window. It refreshes by itself. |
 | Start in Arabic | Add `?lang=ar` to the link |
 | Pause | The pause button (top right) or the **Esc** key |
+| Go back | The **Back** buttons, the **Esc** key or the browser's back button. From the pause menu, **Back to welcome page** leaves a game without saving it |
+| Sound | The **Sound board** on the welcome page (or the pause menu) turns Music, Office sounds, Visitor voices and Effects on or off. Sound starts after the first click |
 | Collect winners | Leaderboard → **Export CSV** downloads every score saved on that laptop |
 | Reset for a new day | Leaderboard → **Reset today's board** |
 
 **The leaderboard lives on each device** (browser storage). With 2–3 laptops, export the CSV from each one at the end of the day to pick the overall winners. A shared live leaderboard across devices would need a small online database; it isn't included in the free version.
+
+**Visitor voices** use the voices built into the laptop's browser. For English, Chrome and Edge always have one. For Arabic, use **Microsoft Edge**, which includes Omani and Gulf Arabic voices; if a laptop has no Arabic voice, Arabic visitors simply stay silent.
 
 **Internet:** the game needs internet once to load its fonts and icons from Google Fonts and unpkg. Without internet it still works, just with plain fonts. Ask IT to allow `github.io`, `fonts.googleapis.com`, `fonts.gstatic.com` and `unpkg.com`.
 
@@ -84,6 +89,7 @@ To change something later, edit the file on GitHub (pencil icon) and commit. The
 | Change on-screen text (EN / AR) | `js/i18n.js` |
 | Change the shift length, questions or chances | The top of `js/game.js`: `SHIFT_SECONDS`, `MAX_Q`, `CHANCES` |
 | Change colours or layout | `css/style.css` |
+| Change the music, office sounds or voices | `js/audio.js` |
 | Change the characters' look | `js/characters.js` (or a visitor's `who.v` settings in `encounters.js`) |
 
 Rules for a visitor block in `encounters.js`:
@@ -104,7 +110,8 @@ css/style.css       the Teller's Window look (1600×900 stage, scales to any scr
 js/i18n.js          interface text, English + Arabic
 js/characters.js    the four hand-drawn characters with colour/prop variants
 js/encounters.js    the 30 visitors and the question list
-js/game.js          game logic, screens, scoring, leaderboard, sound
+js/game.js          game logic, screens, scoring, leaderboard, sound effects
+js/audio.js         background music, office ambience, visitor voices (no sound files)
 assets/             ahlibank logo
 ```
 

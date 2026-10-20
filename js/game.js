@@ -13,14 +13,16 @@
 
   // ---------------- State ----------------
   const S = {
-    ui: 'en', vis: 'en', sound: true,
+    ui: 'en', vis: 'en', sound: true, music: true, office: true, voices: true,
     screen: 'title', prev: null,
     player: { name: '', job: '' },
     timeLeft: SHIFT_SECONDS, running: false, chances: CHANCES, score: 0,
     history: [], enc: null, n: 0, used: [], lastRoles: [], endReason: '', modal: null
   };
   try { Object.assign(S, JSON.parse(localStorage.getItem(PREFS) || '{}')); } catch (e) { /* ignore */ }
-  const savePrefs = () => { try { localStorage.setItem(PREFS, JSON.stringify({ ui: S.ui, vis: S.vis, sound: S.sound })); } catch (e) { /* ignore */ } };
+  const savePrefs = () => { try { localStorage.setItem(PREFS, JSON.stringify({ ui: S.ui, vis: S.vis, sound: S.sound, music: S.music, office: S.office, voices: S.voices })); } catch (e) { /* ignore */ } };
+  const AUDIO = window.AUDIO;
+  AUDIO.set(S);
 
   const stage = document.getElementById('stage');
   const T = () => window.STRINGS[S.ui];
@@ -45,8 +47,8 @@
   window.addEventListener('resize', fit);
 
   // ---------------- Sound (Web Audio, no files) ----------------
-  let AC = null;
-  function ac() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
+  // One AudioContext shared with the music / office ambience in audio.js
+  const ac = () => AUDIO.ctx();
   function tone(freq, dur, type, vol, delay) {
     if (!S.sound) return; const a = ac(); if (!a) return;
     const t0 = a.currentTime + (delay || 0);
@@ -54,6 +56,10 @@
     o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t0);
     g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.2, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  // Visitors you can hear: in person and on the phone (chats and emails stay silent)
+  function say(text, e) {
+    if (e.channel === 'person' || e.channel === 'phone') AUDIO.speak(text, S.vis, e.who);
   }
   function noise(dur, vol) {
     if (!S.sound) return; const a = ac(); if (!a) return;
@@ -159,6 +165,20 @@
   }
   const desk = () => '<div class="brass"></div><div class="desk"></div><div class="tea"><div class="cup"></div><div class="saucer"></div></div>';
   const vignette = () => '<div class="vignette"></div>';
+  // Back / home buttons (arrow flips for Arabic)
+  function navBtn(actName, label, style, icon) {
+    const ic = icon || (S.ui === 'ar' ? 'arrow-right' : 'arrow-left');
+    return '<button class="btn-blue navbtn" data-act="' + actName + '" style="' + (style || '') + '"><i class="ph-bold ph-' + ic + '"></i>' + esc(label) + '</button>';
+  }
+  // Music / office sounds / visitor voices / effects switches
+  const AUDIO_KEYS = [['music', 'music-notes'], ['office', 'buildings'], ['voices', 'user-sound'], ['sound', 'speaker-high']];
+  function audioToggles() {
+    const t = T();
+    return AUDIO_KEYS.map(function (k) {
+      const label = k[0] === 'sound' ? t.effects : t[k[0]];
+      return '<button class="atog' + (S[k[0]] ? ' on' : '') + '" data-act="audio" data-k="' + k[0] + '" aria-pressed="' + !!S[k[0]] + '"><i class="ph-duotone ph-' + (S[k[0]] ? k[1] : 'speaker-slash') + '"></i><span>' + esc(label) + '</span></button>';
+    }).join('');
+  }
 
   function stampsHtml(usedRole) {
     let h = '';
@@ -233,7 +253,11 @@
     };
     S.enc.msgs.push({ from: 'them', text: L(e.open) });
     if (e.channel === 'phone') { S.screen = 'incoming'; render(); startRing(); }
-    else if (e.channel === 'person') { S.screen = 'counter'; render(); SFX.bell(); }
+    else if (e.channel === 'person') {
+      S.screen = 'counter'; render(); SFX.bell();
+      const E = S.enc;
+      setTimeout(function () { if (S.enc === E && S.screen === 'counter' && !E.q) say(L(e.open), e); }, 900);
+    }
     else { S.screen = 'remote'; render(); SFX.pop(); }
   }
 
@@ -251,6 +275,7 @@
       E.msgs.push({ from: 'them', text: L(r.say) });
       if (r.reveal) r.reveal.forEach(function (row) { E.rows.push(row.concat(row.length < 3 ? [0] : []).concat(['new'])); });
       E.typing = false; SFX.pop(); render();
+      say(L(r.say), E.e);
     }, delay);
   }
   function toggleFlag(el) {
@@ -269,6 +294,7 @@
   }
   function resolve(guess) {
     const E = S.enc; if (E.done) return; E.done = true;
+    AUDIO.stopSpeech();
     const correct = guess === E.e.role;
     const realHit = Object.keys(E.flags).filter(function (k) { return E.flags[k] === 'real'; }).length;
     const bd = [];
@@ -288,7 +314,7 @@
     setTimeout(function () { correct ? SFX.ok() : SFX.bad(); }, 250);
   }
   function endShift(reason) {
-    stopRing();
+    stopRing(); AUDIO.stopSpeech();
     if (S.screen === 'over') return;
     S.running = false; S.endReason = reason || '';
     if (S.enc && !S.enc.done) {
@@ -344,6 +370,7 @@
     if (!top.length) h += '<div style="font-family:var(--hand);font-size:21px;margin-top:10px">' + esc(t.noScores) + '</div>';
     top.forEach(function (s, i) { h += '<div class="line"><span>' + (i + 1) + ' ' + esc(shortName(s.name)) + '</span><span>' + s.score + '</span></div>'; });
     h += '</div>';
+    h += '<div class="soundboard"><h4>' + esc(t.audioTitle) + '</h4>' + audioToggles() + '</div>';
     h += '<div class="langplate"><button data-act="lang" data-v="en" class="' + (S.ui === 'en' ? 'on' : '') + '">EN</button><button data-act="lang" data-v="ar" class="' + (S.ui === 'ar' ? 'on' : '') + '">عربي</button></div>';
     return h + vignette();
   }
@@ -376,6 +403,7 @@
     const ready = S.player.name.trim() && S.player.job;
     h += '<button class="btn-gold clockin-btn" id="clockinBtn" data-act="clockin"' + (ready ? '' : ' disabled') + '>' + esc(t.clockIn) + '</button>';
     h += '<div class="need" id="need"' + (ready ? ' style="visibility:hidden"' : '') + '>' + esc(t.needName) + '</div>';
+    h += navBtn('back', t.back, 'left:36px;top:140px;z-index:11');
     return h + vignette();
   }
 
@@ -392,6 +420,7 @@
     h += '</div><div class="rules-card"><span class="pin blue" style="left:50%"></span><div><b>1</b>' + esc(t.r1) + '</div><div><b>2</b>' + esc(t.r2) + '</div><div><b>3</b>' + esc(t.r3) + '</div><div><b>4</b>' + esc(t.r4) + '</div><div class="warn">' + esc(t.rWarn) + '</div></div>';
     h += '<div class="points-note"><span class="pin green"></span><h4>' + esc(t.points) + '</h4>' + esc(t.pts1) + '<br>' + esc(t.pts2) + '<br>' + esc(t.pts3) + '<br>' + esc(t.pts4) + '</div>';
     h += '<button class="btn-gold open-btn" data-act="open">' + esc(t.openCounter) + '</button>';
+    h += navBtn('back', t.back, 'left:1250px;top:812px');
     return h;
   }
 
@@ -575,7 +604,7 @@
       else h += '<div class="res"><b class="' + (H.correct ? 'ok' : 'no') + '">' + (H.correct ? '✓ +' + H.pts : '✗ 0') + '</b><div>' + esc(t.youSaid) + ' ' + esc(roleName(H.guess)) + '</div></div>';
       h += '</div>';
     });
-    h += '</div><div class="acts"><button class="btn-blue" data-act="board">' + esc(t.board) + '</button><button class="btn-blue" data-act="nextplayer">' + esc(t.nextPlayer) + '</button><button class="btn-gold" data-act="again">' + esc(t.playAgain) + '</button></div></div>';
+    h += '</div><div class="acts"><button class="btn-blue" data-act="gohome"><i class="ph-duotone ph-house"></i> ' + esc(t.home) + '</button><button class="btn-blue" data-act="board">' + esc(t.board) + '</button><button class="btn-blue" data-act="nextplayer">' + esc(t.nextPlayer) + '</button><button class="btn-gold" data-act="again">' + esc(t.playAgain) + '</button></div></div>';
     return h + vignette();
   }
 
@@ -617,8 +646,9 @@
     let h = base + '<div class="dim" style="z-index:12"></div><div class="break-sign" style="z-index:13"><div class="cords"></div><div class="board"><b>' + esc(t.onBreak) + '</b><span>' + esc(t.onBreakAr) + '</span></div><div class="planks">';
     h += '<button class="plank resume" data-act="resume"><i class="ph-fill ph-play"></i>' + esc(t.resume) + '</button>';
     h += '<button class="plank" data-act="howto"><i class="ph-duotone ph-question"></i>' + esc(t.howToPlay) + '</button>';
-    h += '<button class="plank" data-act="sound"><i class="ph-duotone ph-speaker-' + (S.sound ? 'high' : 'slash') + '"></i>' + esc(t.sound) + ': ' + esc(S.sound ? t.on : t.off) + '</button>';
+    h += '<div class="plank audio-row">' + audioToggles() + '</div>';
     h += '<button class="plank" data-act="langtoggle"><i class="ph-duotone ph-translate"></i>' + esc(t.language) + ': ' + (S.ui === 'ar' ? 'عربي' : 'English') + '</button>';
+    h += '<button class="plank" data-act="quit"><i class="ph-duotone ph-house"></i>' + esc(t.mainMenu) + '</button>';
     h += '<button class="plank danger" data-act="end"><i class="ph-duotone ph-door-open"></i>' + esc(t.endEarly) + '</button></div></div>';
     return h;
   }
@@ -649,6 +679,8 @@
     document.documentElement.lang = S.ui;
     stage.className = S.ui === 'ar' ? 'ar-ui' : '';
     stage.innerHTML = fn() + modalHtml();
+    AUDIO.scene(S.screen);
+    if (S.screen !== 'title' || S.modal) guardHistory();
     const mb = document.getElementById('mbody'); if (mb) mb.scrollTop = mb.scrollHeight;
     const ni = document.getElementById('nameInput');
     if (ni) {
@@ -686,17 +718,23 @@
         if (!S.player.name.trim() || !S.player.job) return;
         SFX.stamp(); S.player.name = S.player.name.trim(); S.screen = 'briefing'; render(); break;
       case 'open': SFX.bell(); startShift(); break;
-      case 'answer': stopRing(); SFX.click(); S.screen = 'remote'; render(); break;
+      case 'answer': stopRing(); SFX.click(); S.screen = 'remote'; render(); say(L(S.enc.e.open), S.enc.e); break;
       case 'ask': ask(el.getAttribute('data-a')); break;
       case 'moreq': S.enc.offset += (S.screen === 'remote' ? 2 : CHIPS_SHOWN); SFX.click(); render(); break;
       case 'flag': toggleFlag(el); break;
       case 'stamp': stamp(el.getAttribute('data-role'), el); break;
       case 'next': S.modal = null; nextEncounter(); break;
       case 'replay': S.modal = 'replay'; render(); break;
-      case 'pause': stopRing(); S.prev = S.screen; S.screen = 'pause'; render(); break;
+      case 'pause': stopRing(); AUDIO.stopSpeech(); S.prev = S.screen; S.screen = 'pause'; render(); break;
       case 'resume': S.screen = S.prev; render(); if (S.screen === 'incoming') startRing(); break;
       case 'howto': S.modal = 'howto'; render(); break;
-      case 'sound': S.sound = !S.sound; savePrefs(); render(); break;
+      case 'audio': {
+        const k = el.getAttribute('data-k');
+        S[k] = !S[k]; savePrefs(); AUDIO.set(S); render(); SFX.click(); break;
+      }
+      case 'back': goBack(); break;
+      case 'gohome': goHome(); break;
+      case 'quit': pendingConfirm = goHome; S.modal = { confirm: T().sureQuit }; render(); break;
       case 'langtoggle': S.ui = S.ui === 'ar' ? 'en' : 'ar'; savePrefs(); render(); break;
       case 'end': pendingConfirm = function () { endShift('early'); }; S.modal = { confirm: T().sureEnd }; render(); break;
       case 'closemodal': S.modal = null; pendingConfirm = null; render(); break;
@@ -714,6 +752,36 @@
     }
   }
 
+  // Leave whatever is happening and return to the welcome page (the current game is not saved)
+  function goHome() {
+    stopRing(); AUDIO.stopSpeech();
+    S.running = false; S.enc = null; S.modal = null; pendingConfirm = null;
+    S.screen = kiosk ? 'board' : 'title'; render();
+  }
+  // One step back from the current screen. Used by the Back buttons, Esc and the browser's back button.
+  function goBack() {
+    if (S.modal) { act('closemodal'); return; }
+    switch (S.screen) {
+      case 'clockin': S.screen = 'title'; render(); break;
+      case 'briefing': S.screen = 'clockin'; render(); break;
+      case 'board': if (!kiosk) act('home'); break;
+      case 'over': goHome(); break;
+      case 'counter': case 'remote': case 'incoming': case 'verdict': act('pause'); break;
+      case 'pause': act('resume'); break;
+    }
+  }
+  // Keep a history entry so the browser / phone back button steps back inside the game
+  // instead of leaving the page. On the welcome page, back leaves as normal.
+  let guarded = false;
+  function guardHistory() {
+    if (guarded || kiosk) return;
+    try { history.pushState({ wotl: 1 }, ''); guarded = true; } catch (e) { /* ignore */ }
+  }
+  window.addEventListener('popstate', function () {
+    guarded = false;
+    if (S.screen !== 'title' || S.modal) goBack();
+  });
+
   stage.addEventListener('click', function (ev) {
     ac();
     let el = ev.target.closest('[data-act]');
@@ -723,10 +791,8 @@
     act(a, el);
   });
   document.addEventListener('keydown', function (ev) {
-    if (S.modal && ev.key === 'Escape') { act('closemodal'); return; }
-    if ((S.screen === 'counter' || S.screen === 'remote') && !S.modal) {
-      if (ev.key === 'Escape' || ev.key === 'p') act('pause');
-    } else if (S.screen === 'pause' && ev.key === 'Escape') act('resume');
+    if (ev.key === 'Escape') { goBack(); return; }
+    if ((S.screen === 'counter' || S.screen === 'remote') && !S.modal && ev.key === 'p') act('pause');
   });
   // keep the big-screen leaderboard live when scores change in another tab
   window.addEventListener('storage', function (ev) { if (ev.key === STORE && (S.screen === 'board' || S.screen === 'title')) render(); });
