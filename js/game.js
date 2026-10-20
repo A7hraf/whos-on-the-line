@@ -4,8 +4,17 @@
 
   // ---------------- Config ----------------
   const SHIFT_SECONDS = 300;
-  const MAX_Q = 6;
   const CHANCES = 3;
+  const STAGE_EVERY = 3; // the shift gets harder after every 3 visitors
+  // Difficulty. Each list has one value per stage (stage 1, 2, 3).
+  //   q: questions per visitor · tiers: which visitor levels can appear · wait: seconds before the visitor
+  //   gives up (0 = no limit) · red: bad evidence shown in red · underline: real red flags underlined
+  const LEVELS = {
+    easy:   { q: [6, 6, 5], tiers: [[1], [1, 2], [2]],    wait: [0, 0, 0],    red: [1, 1, 1], underline: [1, 1, 0], memo: true,  mult: 1 },
+    medium: { q: [6, 5, 4], tiers: [[1, 2], [2], [2, 3]], wait: [0, 60, 45],  red: [1, 1, 0], underline: [0, 0, 0], memo: true,  mult: 1.5 },
+    hard:   { q: [5, 4, 3], tiers: [[2], [2, 3], [3]],    wait: [50, 40, 30], red: [0, 0, 0], underline: [0, 0, 0], memo: false, mult: 2 }
+  };
+  const LEVEL_ORDER = ['easy', 'medium', 'hard'];
   const CHIPS_SHOWN = 3;
   const ROLES = ['scammer', 'attacker', 'stealer', 'legal'];
   const STORE = 'wotl_scores_v1';
@@ -17,7 +26,8 @@
     screen: 'title', prev: null,
     player: { name: '', job: '' },
     timeLeft: SHIFT_SECONDS, running: false, chances: CHANCES, score: 0,
-    history: [], enc: null, n: 0, used: [], lastRoles: [], endReason: '', modal: null
+    history: [], enc: null, n: 0, used: [], lastRoles: [], endReason: '', modal: null,
+    level: 'easy', stage: 0, levelUpAt: 0
   };
   try { Object.assign(S, JSON.parse(localStorage.getItem(PREFS) || '{}')); } catch (e) { /* ignore */ }
   const savePrefs = () => { try { localStorage.setItem(PREFS, JSON.stringify({ ui: S.ui, vis: S.vis, sound: S.sound, music: S.music, office: S.office, voices: S.voices })); } catch (e) { /* ignore */ } };
@@ -35,7 +45,18 @@
   const encId = (n) => 'A-' + pad2(n);
   const todayKey = () => { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
   const rnd = (a) => a[Math.floor(Math.random() * a.length)];
-  const roleName = (r) => T().roleNames[r];
+  const isF = (who) => !!who && (who.base === 'abaya' || who.base === 'shayla');
+  // Role name for a sentence about a person (Arabic agrees with the visitor's gender)
+  const roleName = (r, who) => r === 'timeout' ? T().tooSlow : (isF(who) ? T().roleNamesF : T().roleNames)[r];
+  // Role name on a rubber stamp: English stamps carry a small Arabic line, Arabic stamps are Arabic only
+  const stampName = (r) => r === 'timeout' ? T().tooSlow : (S.ui === 'ar' ? T().roleStamp[r] : window.ROLE_EN[r]);
+  const stampSub = (r) => (S.ui === 'ar' || r === 'timeout') ? '' : window.ROLE_AR[r];
+  const LV = () => LEVELS[S.level] || LEVELS.easy;
+  const levelName = (k) => T().levels[k || S.level] || '';
+  // Arabic uses «guillemets», English “curly quotes”
+  const quote = (html, lang) => (lang === 'ar' ? '«' + html + '»' : '“' + html + '”');
+  const comma = () => (S.ui === 'ar' ? '، ' : ', ');
+  const upper = (x) => (S.ui === 'ar' ? x : String(x).toUpperCase());
   const visCls = () => (S.vis === 'ar' ? ' vis-ar' : '');
 
   // ---------------- Scaling ----------------
@@ -77,6 +98,7 @@
     ok: () => { tone(523, 0.14, 'triangle', 0.2); tone(659, 0.14, 'triangle', 0.2, 0.12); tone(784, 0.3, 'triangle', 0.22, 0.24); },
     bad: () => { tone(196, 0.25, 'sawtooth', 0.12); tone(147, 0.4, 'sawtooth', 0.12, 0.2); },
     click: () => tone(400, 0.04, 'square', 0.05),
+    levelup: () => { [523, 659, 784, 1047].forEach(function (f, i) { tone(f, 0.18, 'triangle', 0.18, i * 0.09); }); },
     ring: () => { for (let i = 0; i < 6; i++) { tone(440, 0.05, 'square', 0.06, i * 0.1); tone(480, 0.05, 'square', 0.06, i * 0.1 + 0.05); } }
   };
   let ringTimer = null;
@@ -94,6 +116,13 @@
       c.querySelector('.time').textContent = fmtTime(S.timeLeft);
       c.style.background = clockBg();
       c.classList.toggle('low', S.timeLeft <= 30);
+    }
+    const E = S.enc;
+    if (E.wait > 0 && !E.done) {
+      E.wait -= 1;
+      const vt = document.getElementById('vtimer');
+      if (vt) { vt.querySelector('b').textContent = fmtTime(E.wait); vt.querySelector('i').style.width = (100 * E.wait / E.waitMax).toFixed(1) + '%'; vt.classList.toggle('low', E.wait <= 10); }
+      if (E.wait <= 0) { resolve('timeout'); return; }
     }
     if (S.timeLeft <= 0) endShift('time');
   }, 1000);
@@ -129,8 +158,8 @@
   }
   function leftWall(hideMemo) {
     let h = '<div class="clock' + (S.timeLeft <= 30 ? ' low' : '') + '" id="clock" style="background:' + clockBg() + '"><span class="tick t1"></span><span class="tick t2"></span><span class="tick t3"></span><span class="tick t4"></span><span class="time">' + fmtTime(S.timeLeft) + '</span><span class="lbl">' + esc(T().shiftLeft) + '</span></div>';
-    h += '<div class="badge26"><b>26 OCT</b><span>' + esc(T().youthDay) + '</span></div>';
-    if (!hideMemo) {
+    h += '<div class="badge26 lvl-' + S.level + '"><b>' + esc(levelName()) + '</b><span>' + esc(T().stage) + ' ' + (S.stage + 1) + '/3</span></div>';
+    if (!hideMemo && LV().memo) {
       h += '<div class="memo"><span class="tape"></span><h4>' + esc(T().memoTitle) + '</h4>';
       T().memo.forEach(function (m) { h += '<span class="row"><span class="box"></span>' + esc(m) + '</span>'; });
       h += '</div>';
@@ -149,15 +178,15 @@
     let lines = '';
     S.history.forEach(function (h, i) {
       const hl = highlightLast && i === S.history.length - 1 ? ' hl' : '';
-      if (h.correct) lines += '<span class="line' + hl + '"><span>' + h.id + ' ' + ROLE_EN[h.role] + '</span><span>+' + h.pts + '</span></span>';
+      if (h.correct) lines += '<span class="line' + hl + '"><span>' + h.id + ' ' + esc(stampName(h.role)) + '</span><span>+' + h.pts + '</span></span>';
       else if (h.guess) {
-        lines += '<span class="line' + hl + '"><span>' + h.id + ' ' + ROLE_EN[h.guess] + '?</span><span class="neg">-1 ◎</span></span>';
-        lines += '<span class="line sub"><span>&nbsp;&nbsp;(was ' + ROLE_EN[h.role] + ')</span><span></span></span>';
+        lines += '<span class="line' + hl + '"><span>' + h.id + ' ' + esc(stampName(h.guess)) + (h.guess === 'timeout' ? '' : '?') + '</span><span class="neg">-1 ◎</span></span>';
+        lines += '<span class="line sub"><span>&nbsp;&nbsp;(' + esc(T().wasRole) + ' ' + esc(stampName(h.role)) + ')</span><span></span></span>';
       }
     });
     if (S.enc && !S.enc.done) lines += '<span class="line"><span>' + encId(S.n) + ' ......</span><span>?</span></span>';
-    const op = (S.player.name || 'GUEST').trim().split(/\s+/)[0].toUpperCase().slice(0, 10);
-    return '<div class="printer-slot"></div><div class="receipt"><span class="c">AHLIBANK · COUNTER 03</span><span class="c">OPERATOR: ' + esc(op) + '</span><span class="dash">- - - - - - - - - - - -</span><div class="lines">' + lines + '</div><span class="dash">- - - - - - - - - - - -</span><span class="score-l">SCORE</span><span class="score">' + S.score + '</span></div>';
+    const op = upper((S.player.name || 'GUEST').trim().split(/\s+/)[0]).slice(0, 10);
+    return '<div class="printer-slot"></div><div class="receipt"><span class="c">' + esc(T().bank) + ' · ' + esc(T().counter) + '</span><span class="c">' + esc(T().operator) + ': ' + esc(op) + '</span><span class="dash">- - - - - - - - - - - -</span><div class="lines">' + lines + '</div><span class="dash">- - - - - - - - - - - -</span><span class="score-l">' + esc(T().score) + '</span><span class="score">' + S.score + '</span></div>';
   }
   function rightWall(opts) {
     opts = opts || {};
@@ -182,17 +211,18 @@
 
   function stampsHtml(usedRole) {
     let h = '';
+    const rubber = (r) => '<div class="rubber ink-' + r + '"><b>' + esc(stampName(r)) + '</b>' + (stampSub(r) ? '<small>' + stampSub(r) + '</small>' : '') + '</div>';
     if (usedRole) {
       h += '<span class="used-lbl">' + esc(T().stampUsed) + '</span><div class="stamps">';
       ROLES.forEach(function (r) {
         if (r === usedRole) h += '<div class="stamp-slot">' + esc(T().onGlass) + '</div>';
-        else h += '<div class="stamp" style="opacity:.55;pointer-events:none"><span class="knob"></span><span class="neck"></span><div class="rubber ink-' + r + '"><b>' + ROLE_EN[r] + '</b><small>' + ROLE_AR[r] + '</small></div></div>';
+        else h += '<div class="stamp" style="opacity:.55;pointer-events:none"><span class="knob"></span><span class="neck"></span>' + rubber(r) + '</div>';
       });
       return h + '</div>';
     }
     h += '<span class="stamp-label">' + esc(T().stampYour) + '</span><div class="stamps">';
     ROLES.forEach(function (r) {
-      h += '<button class="stamp" data-act="stamp" data-role="' + r + '" aria-label="' + ROLE_EN[r] + '"><span class="knob"></span><span class="neck"></span><div class="rubber ink-' + r + '"><b>' + ROLE_EN[r] + '</b><small>' + ROLE_AR[r] + '</small></div></button>';
+      h += '<button class="stamp" data-act="stamp" data-role="' + r + '" aria-label="' + esc(stampName(r)) + '"><span class="knob"></span><span class="neck"></span>' + rubber(r) + '</button>';
     });
     return h + '</div>';
   }
@@ -206,7 +236,8 @@
       if (p.indexOf('[[') === 0) {
         const key = mi + ':' + (k++);
         const on = S.enc && S.enc.flags[key] ? ' flagged' : '';
-        out += '<span class="w' + on + '" data-act="flag" data-k="' + key + '" data-real="1">' + esc(p.slice(2, -2)) + '</span>';
+        const hint = LV().underline[S.stage] ? ' hint' : '';
+        out += '<span class="w' + on + hint + '" data-act="flag" data-k="' + key + '" data-real="1">' + esc(p.slice(2, -2)) + '</span>';
       } else {
         p.split(/(\s+)/).forEach(function (w) {
           if (!w) return;
@@ -227,9 +258,15 @@
     return fit.length >= 6 ? fit : all;
   }
   function pickEncounter() {
-    let pool = poolFor(S.player.job).filter(function (e) { return S.used.indexOf(e.id) < 0; });
-    if (!pool.length) pool = window.ENCOUNTERS.filter(function (e) { return S.used.indexOf(e.id) < 0; });
-    if (!pool.length) { S.used = S.used.slice(-2); pool = window.ENCOUNTERS.filter(function (e) { return S.used.indexOf(e.id) < 0; }); }
+    const tiers = LV().tiers[S.stage];
+    const fresh = function (e) { return S.used.indexOf(e.id) < 0; };
+    const inTier = function (e) { return tiers.indexOf(e.level || 2) >= 0; };
+    // Prefer visitors who fit the player's post AND the current difficulty; widen step by step if none are left
+    let pool = poolFor(S.player.job).filter(fresh).filter(inTier);
+    if (pool.length < 2) pool = window.ENCOUNTERS.filter(fresh).filter(inTier);
+    if (!pool.length) pool = poolFor(S.player.job).filter(fresh);
+    if (!pool.length) pool = window.ENCOUNTERS.filter(fresh);
+    if (!pool.length) { S.used = S.used.slice(-2); pool = window.ENCOUNTERS.filter(fresh); }
     let roles = ROLES.filter(function (r) { return pool.some(function (e) { return e.role === r; }); });
     const last2 = S.lastRoles.slice(-2);
     if (last2.length === 2 && last2[0] === last2[1]) {
@@ -245,11 +282,15 @@
   }
   function nextEncounter() {
     if (S.chances <= 0 || S.timeLeft <= 0) { endShift(S.chances <= 0 ? 'chances' : 'time'); return; }
+    // Stage goes up every few visitors: harder visitors, fewer questions, less patience
+    const stage = Math.min(2, Math.floor(S.n / STAGE_EVERY));
+    if (stage > S.stage) { S.stage = stage; S.levelUpAt = Date.now(); setTimeout(SFX.levelup, 350); }
     const e = pickEncounter();
     S.n += 1;
+    const wait = LV().wait[S.stage];
     S.enc = {
       e: e, msgs: [], used: [], q: 0, verified: false, flags: {}, rows: e.card.rows.slice(), typing: false,
-      offset: 0, entered: false, done: false
+      offset: 0, entered: false, done: false, maxQ: LV().q[S.stage], wait: wait, waitMax: wait, stage: S.stage
     };
     S.enc.msgs.push({ from: 'them', text: L(e.open) });
     if (e.channel === 'phone') { S.screen = 'incoming'; render(); startRing(); }
@@ -263,7 +304,7 @@
 
   // ---------------- Actions ----------------
   function ask(aid) {
-    const E = S.enc; if (!E || E.typing || E.done || E.q >= MAX_Q || E.used.indexOf(aid) >= 0) return;
+    const E = S.enc; if (!E || E.typing || E.done || E.q >= E.maxQ || E.used.indexOf(aid) >= 0) return;
     const A = window.ACTIONS[aid]; const reply = E.e.acts[aid];
     E.used.push(aid); E.q += 1; if (A.verify) E.verified = true;
     E.msgs.push({ from: 'me', text: L(A.say) });
@@ -304,6 +345,8 @@
       if (E.q <= 3) { pts += 50; bd.push(['speed', 50]); }
       if (E.verified) { pts += 20; bd.push(['papers', 20]); }
       const fp = Math.min(3, realHit) * 10; if (fp) { pts += fp; bd.push(['flagsPts', fp]); }
+      const boosted = Math.round(pts * LV().mult * (1 + 0.25 * E.stage));
+      if (boosted > pts) { bd.push(['levelBonus', boosted - pts]); pts = boosted; }
       S.score += pts;
     } else {
       S.chances -= 1;
@@ -321,7 +364,7 @@
       S.enc.done = true;
       S.history.push({ id: encId(S.n), e: S.enc.e, role: S.enc.e.role, guess: null, correct: false, pts: 0, bd: [], msgs: S.enc.msgs.slice(), unresolved: true });
     }
-    S.bonus = S.chances * 50;
+    S.bonus = Math.round(S.chances * 50 * LV().mult);
     S.total = S.score + S.bonus;
     saveScore();
     S.modal = null;
@@ -334,7 +377,7 @@
     const list = loadScores();
     const right = S.history.filter(function (h) { return h.correct; }).length;
     S.savedAt = Date.now();
-    list.push({ name: S.player.name || 'Guest', job: S.player.job, score: S.total, right: right, seen: S.history.length, date: todayKey(), t: S.savedAt });
+    list.push({ name: S.player.name || 'Guest', job: S.player.job, level: S.level, score: S.total, right: right, seen: S.history.length, date: todayKey(), t: S.savedAt });
     try { localStorage.setItem(STORE, JSON.stringify(list)); } catch (e) { /* ignore */ }
   }
   function todayScores() {
@@ -346,8 +389,8 @@
     return i >= 0 ? i + 1 : list.length;
   }
   function exportCsv() {
-    const rows = [['date', 'time', 'name', 'job', 'score', 'right', 'visitors']];
-    loadScores().forEach(function (s) { rows.push([s.date, new Date(s.t).toLocaleTimeString(), s.name, window.STRINGS.en.jobs[s.job] || s.job, s.score, s.right, s.seen]); });
+    const rows = [['date', 'time', 'name', 'job', 'level', 'score', 'right', 'visitors']];
+    loadScores().forEach(function (s) { rows.push([s.date, new Date(s.t).toLocaleTimeString(), s.name, window.STRINGS.en.jobs[s.job] || s.job, window.STRINGS.en.levels[s.level] || '', s.score, s.right, s.seen]); });
     const csv = rows.map(function (r) { return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -359,14 +402,14 @@
   function scrTitle() {
     const t = T();
     let q = '<div class="queue">' + ['dish', 'polo', 'abaya', 'shayla'].map(function (b) { return '<div>' + window.drawSilhouette(b) + '</div>'; }).join('') + '</div>';
-    let inner = lobby({ noProps: true }) + q + '<div class="tt">' + esc(t.gameTitle) + '</div><div class="tt-ar">' + esc(window.STRINGS.en.gameTitleAr) + '</div><div class="tt-sub">' + esc(t.tagline) + '</div>';
+    let inner = lobby({ noProps: true }) + q + '<div class="tt">' + esc(t.gameTitle) + '</div>' + (t.gameTitleAr ? '<div class="tt-ar">' + esc(t.gameTitleAr) + '</div>' : '') + '<div class="tt-sub">' + esc(t.tagline) + '</div>';
     let h = bunting() + logo(true) + led(t.counterOpen) + '<div class="title-glass">' + windowFrame(inner, 'wide') + '</div>';
-    h += '<div class="round-badge"><b>26 OCT</b><span>Youth Day</span><small>' + esc(window.STRINGS.en.youthDayAr) + '</small></div>';
+    h += '<div class="round-badge"><b>' + esc(t.dateShort) + '</b><span>' + esc(S.ui === 'ar' ? t.youthDayAr : t.youthDay) + '</span>' + (S.ui === 'ar' ? '' : '<small>' + esc(t.youthDayAr) + '</small>') + '</div>';
     h += desk();
     h += '<div class="howto"><span class="tape"></span><h4>' + esc(t.howTitle) + '</h4><p>' + esc(t.howBody) + '</p></div>';
     h += '<div class="bell-wrap"><div class="bell" data-act="start" role="button" aria-label="' + esc(t.ringStart) + '"><span class="knob"></span><span class="dome"></span><span class="base"></span></div><button class="btn-gold bell-label" data-act="start">' + esc(t.ringStart) + '</button></div>';
     const top = todayScores().slice(0, 5);
-    h += '<div class="top-receipt" data-act="board" role="button"><div style="text-align:center">TOP DETECTIVES<br>TODAY</div><div style="text-align:center;color:#999">- - - - - - - - -</div>';
+    h += '<div class="top-receipt" data-act="board" role="button"><div style="text-align:center">' + t.topToday + '</div><div style="text-align:center;color:#999">- - - - - - - - -</div>';
     if (!top.length) h += '<div style="font-family:var(--hand);font-size:21px;margin-top:10px">' + esc(t.noScores) + '</div>';
     top.forEach(function (s, i) { h += '<div class="line"><span>' + (i + 1) + ' ' + esc(shortName(s.name)) + '</span><span>' + s.score + '</span></div>'; });
     h += '</div>';
@@ -374,16 +417,19 @@
     h += '<div class="langplate"><button data-act="lang" data-v="en" class="' + (S.ui === 'en' ? 'on' : '') + '">EN</button><button data-act="lang" data-v="ar" class="' + (S.ui === 'ar' ? 'on' : '') + '">عربي</button></div>';
     return h + vignette();
   }
+  // First letter of a name part, skipping the Arabic article "ال" (الهنائي → ه)
+  const initial = (w) => w.replace(/^ال(?=.)/, '').charAt(0);
+  const isArabic = (x) => /[\u0600-\u06FF]/.test(x);
   function shortName(n) {
     const p = String(n).trim().split(/\s+/);
-    return (p.length > 1 ? p[0] + ' ' + p[p.length - 1].charAt(0) + '.' : p[0]).toUpperCase().slice(0, 11);
+    return (p.length > 1 ? p[0] + ' ' + initial(p[p.length - 1]) + '.' : p[0]).toUpperCase().slice(0, 11);
   }
 
   function scrClockIn() {
     const t = T();
     let h = bunting(true) + logo() + windowFrame(lobby({}), '') + desk() + '<div class="dim"></div>';
     h += '<div class="clipboard"><div class="clip"></div><div class="sheet">';
-    h += '<h2><span style="color:var(--navy);font-size:52px">' + esc(t.signIn) + '</span><span>' + esc(t.signInAr) + '</span></h2>';
+    h += '<h2><span style="color:var(--navy);font-size:52px">' + esc(t.signIn) + '</span>' + (t.signInAr ? '<span>' + esc(t.signInAr) + '</span>' : '') + '</h2>';
     h += '<div class="meta">' + esc(t.signMeta) + '</div>';
     h += '<div class="namefield"><span>' + esc(t.name) + '</span><input id="nameInput" maxlength="24" autocomplete="off" placeholder="' + esc(t.namePh) + '" value="' + esc(S.player.name) + '"></div>';
     h += '<div class="post-l">' + esc(t.post) + '</div><div class="jobs">';
@@ -398,7 +444,7 @@
     const now = new Date();
     const hh = now.getHours() % 12, mm = now.getMinutes();
     h += '<div class="clockpanel"><div class="analog"><span class="h" style="transform:rotate(' + (hh * 30 + mm / 2) + 'deg)"></span><span class="m" style="transform:rotate(' + (mm * 6) + 'deg)"></span><span class="dot"></span></div>';
-    h += '<div class="punchcard" id="punch">ahlibank<br><span id="punchName">' + esc((S.player.name || '').slice(0, 10)) + '</span><br>26 OCT<br>' + t.in + ': ' + pad2(now.getHours()) + ':' + pad2(mm) + '</div><div class="slot-bar"></div>';
+    h += '<div class="punchcard" id="punch">' + esc(S.ui === 'ar' ? t.bank : 'ahlibank') + '<br><span id="punchName">' + esc((S.player.name || '').slice(0, 10)) + '</span><br>' + esc(t.dateShort) + '<br>' + esc(t.in) + ': ' + pad2(now.getHours()) + ':' + pad2(mm) + '</div><div class="slot-bar"></div>';
     h += '<div class="tc-tag">' + esc(t.timeClock) + '</div><div class="tc-sub">' + esc(t.punch) + '</div></div>';
     const ready = S.player.name.trim() && S.player.job;
     h += '<button class="btn-gold clockin-btn" id="clockinBtn" data-act="clockin"' + (ready ? '' : ' disabled') + '>' + esc(t.clockIn) + '</button>';
@@ -411,16 +457,20 @@
     const t = T();
     const bases = { scammer: 'dish', attacker: 'polo', stealer: 'abaya', legal: 'shayla' };
     let h = '<div class="cork"></div>' + bunting() + logo();
-    h += '<div class="brief-title"><b>' + esc(t.briefTitle) + '</b><span>' + esc(t.briefTitleAr) + '</span></div><div class="polaroids">';
+    h += '<div class="brief-title"><b>' + esc(t.briefTitle) + '</b>' + (t.briefTitleAr ? '<span>' + esc(t.briefTitleAr) + '</span>' : '') + '</div><div class="polaroids">';
     ROLES.forEach(function (r) {
       h += '<div class="pol"><span class="pin"></span><div class="photo"><div class="sil">' + window.drawSilhouette(bases[r]) + '</div><span class="q">?</span></div>';
-      h += '<div class="rn"><b class="c-' + r + '">' + esc(S.ui === 'ar' ? window.STRINGS.ar.roleNames[r] : ROLE_EN[r]) + '</b><span class="c-' + r + '">' + esc(S.ui === 'ar' ? ROLE_EN[r] : ROLE_AR[r]) + '</span></div>';
+      h += '<div class="rn"><b class="c-' + r + '">' + esc(stampName(r)) + '</b>' + (stampSub(r) ? '<span class="c-' + r + '">' + esc(stampSub(r)) + '</span>' : '') + '</div>';
       h += '<p><b>' + esc(t.wants) + '</b> ' + esc(t.roleWants[r]) + '</p><p><b>' + esc(t.watch) + '</b> ' + esc(t.roleWatch[r]) + '</p></div>';
     });
     h += '</div><div class="rules-card"><span class="pin blue" style="left:50%"></span><div><b>1</b>' + esc(t.r1) + '</div><div><b>2</b>' + esc(t.r2) + '</div><div><b>3</b>' + esc(t.r3) + '</div><div><b>4</b>' + esc(t.r4) + '</div><div class="warn">' + esc(t.rWarn) + '</div></div>';
     h += '<div class="points-note"><span class="pin green"></span><h4>' + esc(t.points) + '</h4>' + esc(t.pts1) + '<br>' + esc(t.pts2) + '<br>' + esc(t.pts3) + '<br>' + esc(t.pts4) + '</div>';
-    h += '<button class="btn-gold open-btn" data-act="open">' + esc(t.openCounter) + '</button>';
-    h += navBtn('back', t.back, 'left:1250px;top:812px');
+    h += '<div class="level-pick"><h4>' + esc(t.chooseLevel) + '</h4>';
+    LEVEL_ORDER.forEach(function (k, i) {
+      h += '<button class="lvl-btn lvl-' + k + '" data-act="level" data-v="' + k + '"><span class="dots">' + '●'.repeat(i + 1) + '<s>' + '●'.repeat(2 - i) + '</s></span><b>' + esc(t.levels[k]) + '</b><small>' + esc(t.levelDesc[k]) + '</small></button>';
+    });
+    h += '</div>';
+    h += navBtn('back', t.back, 'left:36px;top:122px');
     return h;
   }
 
@@ -433,17 +483,17 @@
     let inner = lobby({ sticker: true }) + '<div class="back-card"><b>' + esc(t.backMoment) + '</b><span>' + esc(t.onCall) + '</span></div>';
     let h = bunting() + logo() + leftWall() + led(t.ringing, 'green') + windowFrame(inner) + rightWall() + desk();
     h += '<div class="ringring">' + esc(t.ringRing) + '</div><span class="waves l"></span><span class="waves l2"></span><span class="waves r"></span><span class="waves r2"></span>';
-    h += '<div class="phone"><div class="handset"></div><div class="body"><div class="lcd">INCOMING ·<br>LINE 2<br>' + esc(strip(L(e.line || ['+968 9••• ••••', '']))).split(' · ')[0] + '<br>' + esc((window.PLACES[e.place] || ['', ''])[0].toUpperCase()) + '</div><div class="keys">';
+    h += '<div class="phone"><div class="handset"></div><div class="body"><div class="lcd">' + esc(t.incoming) + ' ·<br>' + esc(t.line2) + '<br><span dir="ltr">' + esc(strip(L(e.line || ['+968 9••• ••••', '']))).split(' · ')[0] + '</span><br>' + esc(upper(U(window.PLACES[e.place] || ['', '']))) + '</div><div class="keys">';
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].forEach(function (k) { h += '<span>' + k + '</span>'; });
     h += '</div></div></div>';
     h += '<div class="callcard"><h3>' + esc(t.customerN) + ' ' + S.n + '</h3><div class="m">' + esc(U(window.CHANNELS.phone)) + ' · ' + esc(U(window.PLACES[e.place])) + '</div><div class="s">' + esc(t.cantSee) + '</div><button class="btn-gold" data-act="answer">' + esc(t.answer) + '</button></div>';
     return h + vignette();
   }
 
-  function evidenceCard(rows, title, stampWord, stampCls) {
-    let h = '<div class="evidence"><h5>' + esc(U(title)).toUpperCase() + '</h5>';
+  function evidenceCard(rows, title, stampWord, stampCls, showBad) {
+    let h = '<div class="evidence"><h5>' + esc(upper(U(title))) + '</h5>';
     rows.forEach(function (r) {
-      h += '<div class="r' + (r[2] ? ' bad' : '') + '"' + (r[3] === 'new' ? ' style="animation:slideUp .3s"' : '') + '><em>' + esc(U(r[0])) + ':</em> <b>' + esc(U(r[1])) + '</b></div>';
+      h += '<div class="r' + (r[2] && showBad ? ' bad' : '') + '"' + (r[3] === 'new' ? ' style="animation:slideUp .3s"' : '') + '><em>' + esc(U(r[0])) + ':</em> <b>' + esc(U(r[1])) + '</b></div>';
     });
     if (stampWord) h += '<span class="refused ' + (stampCls || '') + '">' + stampWord + '</span>';
     return h + '</div>';
@@ -451,7 +501,7 @@
 
   function chipsHtml(isRemote) {
     const E = S.enc, t = T();
-    if (E.q >= MAX_Q) return '<span class="make-call">' + esc(t.makeCall) + '</span>';
+    if (E.q >= E.maxQ) return '<span class="make-call">' + esc(t.makeCall) + '</span>';
     const left = Object.keys(E.e.acts).filter(function (a) { return E.used.indexOf(a) < 0 && window.ACTIONS[a]; });
     if (!left.length) return '<span class="make-call">' + esc(t.makeCall) + '</span>';
     const n = isRemote ? 2 : CHIPS_SHOWN;
@@ -468,10 +518,17 @@
   }
   function pipsHtml() {
     let h = '<div class="pips">' + esc(T().questions);
-    for (let i = 0; i < MAX_Q; i++) h += '<span class="' + (i < S.enc.q ? 'on' : '') + '"></span>';
+    for (let i = 0; i < S.enc.maxQ; i++) h += '<span class="' + (i < S.enc.q ? 'on' : '') + '"></span>';
     return h + '</div>';
   }
 
+  function playExtras() {
+    const t = T(), E = S.enc;
+    let h = '';
+    if (E.waitMax > 0) h += '<div class="vtimer' + (E.wait <= 10 ? ' low' : '') + '" id="vtimer"><span>' + esc(t.waits) + '</span><b>' + fmtTime(E.wait) + '</b><em><i style="width:' + (100 * E.wait / E.waitMax).toFixed(1) + '%"></i></em></div>';
+    if (Date.now() - S.levelUpAt < 2600) h += '<div class="levelup"><b>' + esc(t.levelUp) + '</b><span>' + esc(t.stage) + ' ' + (S.stage + 1) + ' · ' + esc(t.stageMsg[S.stage]) + '</span></div>';
+    return h;
+  }
   function scrCounter() {
     const t = T(), E = S.enc, e = E.e;
     const firstView = !E.entered; E.entered = true;
@@ -479,24 +536,25 @@
     let inner = lobby({ sticker: true }) + who;
     if (E.q === 0 && e.arrive) inner += '<div class="scene-line' + visCls() + '">' + esc(L(e.arrive)) + '</div>';
     let h = bunting() + logo() + leftWall() + led(t.nowServing + ' ' + encId(S.n)) + windowFrame(inner) + rightWall() + desk();
-    h += '<span class="desk-label" style="left:52px;top:614px">' + esc(t.evidence) + '</span>' + evidenceCard(E.rows, e.card.title);
+    h += '<span class="desk-label" style="left:52px;top:614px">' + esc(t.evidence) + '</span>' + evidenceCard(E.rows, e.card.title, '', '', LV().red[E.stage]);
     // Dialogue box
     const lastThem = E.msgs.map(function (m, i) { return [m, i]; }).filter(function (x) { return x[0].from === 'them'; }).pop();
     const lastMe = E.msgs.filter(function (m) { return m.from === 'me'; }).pop();
-    h += '<div class="dialog"><div class="tags"><span class="nametag">' + esc(U(e.who.name)).toUpperCase() + ', ' + e.who.age + '</span><span class="subtag"><i class="ph-duotone ph-door-open"></i>' + subtag(e) + '</span></div>' + pipsHtml();
-    if (lastMe) h += '<div class="you">' + esc(t.youAsked) + ' “' + esc(lastMe.text) + '”</div>';
+    h += '<div class="dialog"><div class="tags"><span class="nametag">' + esc(upper(U(e.who.name))) + comma() + e.who.age + '</span><span class="subtag"><i class="ph-duotone ph-door-open"></i>' + subtag(e) + '</span></div>' + pipsHtml();
+    if (lastMe) h += '<div class="you">' + esc(t.youAsked) + ' ' + quote(esc(lastMe.text), S.vis) + '</div>';
     if (E.typing) h += '<p class="line"><span class="typing-dots"><span></span><span></span><span></span></span></p>';
-    else h += '<p class="line' + visCls() + (strip(lastThem[0].text).length > 110 ? ' small' : '') + '">“' + tappable(lastThem[0].text, lastThem[1]) + '”</p>';
+    else h += '<p class="line' + visCls() + (strip(lastThem[0].text).length > 110 ? ' small' : '') + '">' + quote(tappable(lastThem[0].text, lastThem[1]), S.vis) + '</p>';
     h += '<span class="more">▼</span><span class="hint"><i class="ph-duotone ph-hand-pointing"></i>' + esc(t.flagHint) + ' · <span id="flagcount">' + Object.keys(E.flags).length + '</span> ' + esc(t.flagged) + '</span>';
     h += '<div class="chips">' + chipsHtml(false) + '</div></div>';
-    h += stampsHtml();
+    h += stampsHtml() + playExtras();
     return h + vignette();
   }
 
   function recordPanel(rows, title, e) {
-    let h = '<div class="record"><h5>' + esc(U(title)).toUpperCase() + '</h5>';
+    const showBad = LV().red[S.enc.stage];
+    let h = '<div class="record"><h5>' + esc(upper(U(title))) + '</h5>';
     rows.forEach(function (r) {
-      h += '<div class="f' + (r[2] ? ' bad' : '') + '"' + (r[3] === 'new' ? ' style="animation:slideUp .3s"' : '') + '><em>' + esc(U(r[0])) + '</em><b>' + esc(U(r[1])) + '</b></div>';
+      h += '<div class="f' + (r[2] && showBad ? ' bad' : '') + '"' + (r[3] === 'new' ? ' style="animation:slideUp .3s"' : '') + '><em>' + esc(U(r[0])) + '</em><b>' + esc(U(r[1])) + '</b></div>';
     });
     return h + '</div>';
   }
@@ -512,7 +570,7 @@
     else if (ch === 'email') av = '<div class="avatar unknown" style="font-family:var(--disp);padding-top:6px">' + esc(U(e.who.name).charAt(0)) + '</div>';
     else av = '<div class="avatar"><div class="inner">' + window.drawCharacter(e.who) + '</div></div>';
     const subl = E.typing ? t.typing : strip(U(e.line || ['', '']));
-    h += '<div class="mhead ch-' + ch + '">' + av + '<div class="nm"><b>' + esc(U(e.who.name)) + (ch === 'email' ? '' : ', ' + e.who.age) + '</b><span>' + esc(U(window.CHANNELS[ch])) + ' · ' + esc(subl) + '</span></div><i class="ph-duotone ph-' + icons[ch] + ' ico"></i></div>';
+    h += '<div class="mhead ch-' + ch + '">' + av + '<div class="nm"><b>' + esc(U(e.who.name)) + (ch === 'email' ? '' : comma() + e.who.age) + '</b><span>' + esc(U(window.CHANNELS[ch])) + ' · ' + esc(subl) + '</span></div><i class="ph-duotone ph-' + icons[ch] + ' ico"></i></div>';
     h += '<div class="mbody" id="mbody">';
     h += '<div class="bubble sys">' + esc(T().claims) + ' ' + esc(U(e.claim)) + ' · ' + esc(T().flagHint) + '</div>';
     E.msgs.forEach(function (m, i) {
@@ -520,10 +578,10 @@
       else h += '<div class="bubble' + visCls() + (ch === 'email' && i === 0 ? ' email-subj' : '') + '">' + tappable(m.text, i) + '</div>';
     });
     if (E.typing) h += '<div class="bubble"><span class="typing-dots"><span style="background:#4a5b75"></span><span style="background:#4a5b75"></span><span style="background:#4a5b75"></span></span></div>';
-    h += '</div><div class="mfoot">' + chipsHtml(true) + '<span class="left">' + (MAX_Q - E.q) + ' ' + esc(t.leftOf) + ' · <span id="flagcount">' + Object.keys(E.flags).length + '</span> ⚑</span></div></div>';
+    h += '</div><div class="mfoot">' + chipsHtml(true) + '<span class="left">' + (E.maxQ - E.q) + ' ' + esc(t.leftOf) + ' · <span id="flagcount">' + Object.keys(E.flags).length + '</span> ⚑</span></div></div>';
     h += recordPanel(E.rows, e.card.title, e) + '</div></div>';
     h += '<div class="mstand"></div><div class="mfoot-base"></div><div class="keyboard">' + new Array(45).fill('<span></span>').join('') + '</div>';
-    h += stampsHtml();
+    h += stampsHtml() + playExtras();
     return h + vignette();
   }
 
@@ -535,9 +593,9 @@
     ];
     let inner = lobby({}) + '<div class="who" style="animation:none">' + window.drawCharacter(e.who, { busted: busted, mood: e.role === 'legal' ? 'happy' : '' }) + '</div>';
     const g = H.guess;
-    inner += '<div class="big-stamp b-' + g + (H.correct ? '' : ' crossed') + '"><b>' + ROLE_EN[g] + '</b><small>' + ROLE_AR[g] + '</small></div>';
+    inner += '<div class="big-stamp b-' + g + (H.correct || g === 'timeout' ? '' : ' crossed') + '"><b>' + esc(stampName(g)) + '</b>' + (stampSub(g) ? '<small>' + stampSub(g) + '</small>' : '') + '</div>';
     let h = bunting() + logo();
-    h += led((H.correct ? t.caseClosed : t.wrongLed) + ' · ' + H.id, H.correct ? 'green' : 'red');
+    h += led((H.correct ? t.caseClosed : (g === 'timeout' ? t.tooSlow : t.wrongLed)) + ' · ' + H.id, H.correct ? 'green' : 'red');
     h += windowFrame(inner) + rightWall({ highlight: true, cracking: !H.correct }) + desk();
     // notes
     const green = e.role === 'legal';
@@ -553,25 +611,26 @@
       if (H.q > 3) h += '<span class="z">' + esc(t.speed) + ' +0</span>';
       h += '</div>';
     } else {
-      h += '<div class="n bad">0</div><div class="lost-chance">' + esc(t.lostChance) + '</div><div class="bd"><span>' + esc(t.youSaid) + ': <b class="c-' + g + '" style="font-weight:400">' + esc(roleName(g)) + '</b></span><span>' + (S.ui === 'ar' ? esc(t.truth) + ' ' + esc(U(e.who.name)) : esc(U(e.who.name)) + ' ' + esc(t.was)) + ': <b class="c-' + e.role + '" style="font-weight:400">' + esc(roleName(e.role)) + '</b></span></div>';
+      const said = g === 'timeout' ? '<span>' + esc(U(e.who.name)) + ' ' + esc(t.leftWaiting) + '</span>' : '<span>' + esc(t.youSaid.replace(/:$/, '')) + ': <b class="c-' + g + '" style="font-weight:400">' + esc(roleName(g, e.who)) + '</b></span>';
+      h += '<div class="n bad">0</div><div class="lost-chance">' + esc(t.lostChance) + '</div><div class="bd">' + said + '<span>' + (S.ui === 'ar' ? esc(t.truth) + ' ' + esc(U(e.who.name)) : esc(U(e.who.name)) + ' ' + esc(t.was)) + ': <b class="c-' + e.role + '" style="font-weight:400">' + esc(roleName(e.role, e.who)) + '</b></span></div>';
     }
     h += '</div>';
     // evidence stamped
     if (e.channel === 'person') {
       const word = H.correct ? (green ? t.approved : t.refused) : '';
-      h += evidenceCard(e.card.rows, e.card.title, word, green ? 'approved' : '');
+      h += evidenceCard(e.card.rows, e.card.title, word, green ? 'approved' : '', true);
     }
     // dialogue
     const tagCls = H.correct ? 'ok' : 'bad';
-    const tag = H.correct ? (green ? t.wellServed : t.caught) : t.wrongCall;
+    const tag = H.correct ? (green ? t.wellServed : t.caught) : (g === 'timeout' ? t.tooSlow : t.wrongCall);
     const nm = esc(U(e.who.name));
     let line;
-    const roleSpan = '<span class="c-' + e.role + '" style="filter:brightness(1.35)">' + esc(roleName(e.role)) + '</span>';
+    const roleSpan = '<span class="c-' + e.role + '" style="filter:brightness(1.35)">' + esc(roleName(e.role, e.who)) + '</span>';
     if (S.ui === 'ar') line = esc(t.truth) + ' ' + nm + ': ' + roleSpan + '. ' + esc(U(e.sum));
     else line = nm + ' ' + (green ? 'was a <span class="c-legal" style="filter:brightness(1.35)">genuine customer</span>.' : 'was ' + (e.role === 'attacker' ? 'an ' : 'a ') + roleSpan + '.') + ' ' + esc(U(e.sum));
     h += '<div class="dialog"><div class="tags"><span class="nametag ' + tagCls + '">' + esc(tag) + '</span></div>';
     h += '<p class="line small' + (S.ui === 'ar' ? ' vis-ar' : '') + '" style="top:30px">' + line + '</p>';
-    h += '<div class="exitline' + (S.ui === 'ar' ? ' vis-ar' : '') + '">' + nm + ': “' + esc(U(e.exit)) + '” ' + (e.exitNote ? '<em>' + esc(U(e.exitNote)) + '</em>' : '') + '</div>';
+    h += '<div class="exitline' + (S.ui === 'ar' ? ' vis-ar' : '') + '">' + nm + ': ' + quote(esc(U(e.exit)), S.ui) + ' ' + (e.exitNote ? '<em>' + esc(U(e.exitNote)) + '</em>' : '') + '</div>';
     const over = S.chances <= 0 || S.timeLeft <= 0;
     h += '<div class="verdict-actions"><button class="btn-blue" data-act="replay">' + esc(t.replay) + '</button><button class="btn-gold" data-act="next">' + (over ? esc(t.seeResults) : esc(t.callNext) + ' ' + encId(S.n + 1)) + '</button></div></div>';
     h += stampsHtml(g);
@@ -582,26 +641,26 @@
     const t = T();
     let lines = '';
     S.history.forEach(function (H) {
-      if (H.unresolved) lines += '<div class="line" style="color:#888"><span>' + H.id + ' ' + ROLE_EN[H.role] + ' …</span><span>0</span></div>';
-      else if (H.correct) lines += '<div class="line"><span>' + H.id + ' ' + ROLE_EN[H.role] + '</span><span>+' + H.pts + '</span></div>';
-      else lines += '<div class="line bad"><span>' + H.id + ' ' + ROLE_EN[H.role] + ' ✗</span><span>0</span></div>';
+      if (H.unresolved) lines += '<div class="line" style="color:#888"><span>' + H.id + ' ' + esc(stampName(H.role)) + ' …</span><span>0</span></div>';
+      else if (H.correct) lines += '<div class="line"><span>' + H.id + ' ' + esc(stampName(H.role)) + '</span><span>+' + H.pts + '</span></div>';
+      else lines += '<div class="line bad"><span>' + H.id + ' ' + esc(stampName(H.role)) + ' ✗</span><span>0</span></div>';
     });
     const rank = rankToday();
-    const op = (S.player.name || 'GUEST').trim().split(/\s+/)[0].toUpperCase().slice(0, 12);
+    const op = upper((S.player.name || 'GUEST').trim().split(/\s+/)[0]).slice(0, 12);
     const d = new Date();
     let h = bunting(true) + logo() + led(S.endReason === 'time' ? t.timeUp + ' · ' + t.shiftOver : t.shiftOver, 'red') + desk();
-    h += '<div class="final-receipt"><div class="c">AHLIBANK · COUNTER 03</div><div class="c">OPERATOR: ' + esc(op) + '</div><div class="c">' + pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear() + ' · YOUTH DAY</div><div class="dash">- - - - - - - - - - - - - -</div><div class="lines">' + lines + '</div><div class="dash">- - - - - - - - - - - - - -</div>';
+    h += '<div class="final-receipt"><div class="c">' + esc(t.bank) + ' · ' + esc(t.counter) + '</div><div class="c">' + esc(t.operator) + ': ' + esc(op) + '</div><div class="c">' + pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear() + ' · ' + esc(upper(t.youthDay)) + '</div><div class="c">' + esc(t.difficulty) + ': ' + esc(upper(levelName())) + '</div><div class="dash">- - - - - - - - - - - - - -</div><div class="lines">' + lines + '</div><div class="dash">- - - - - - - - - - - - - -</div>';
     h += '<div class="line"><span>' + t.chancesLeft + ' ' + S.chances + '</span><span>+' + S.bonus + '</span></div><div class="dash">- - - - - - - - - - - - - -</div>';
     h += '<div class="tot">' + t.total + '</div><div class="big">' + S.total + '</div><div class="rank">' + t.rank + ' #' + rank + ' ' + t.today + '</div><div class="barcode"></div></div>';
     const right = S.history.filter(function (x) { return x.correct; }).length;
-    h += '<div class="folder-tab">' + esc(t.caseFiles) + ' · 26</div><div class="folder"><div class="head"><b>' + esc(right >= Math.ceil(S.history.length / 2) ? t.wellDone : t.goodTry) + ', ' + esc((S.player.name || '').split(' ')[0]) + '!</b><span>' + right + ' / ' + S.history.length + ' ' + esc(t.readRight) + '</span></div><div class="cases">';
+    h += '<div class="folder-tab">' + esc(t.caseFiles) + ' · 26</div><div class="folder"><div class="head"><b>' + esc(right >= Math.ceil(S.history.length / 2) ? t.wellDone : t.goodTry) + comma() + esc((S.player.name || '').split(' ')[0]) + '!</b><span>' + right + ' / ' + S.history.length + ' ' + esc(t.readRight) + '</span></div><div class="cases">';
     S.history.forEach(function (H) {
       const e = H.e;
       h += '<div class="case"><div class="av"><div class="inner">' + window.drawCharacter(e.who) + '</div></div>';
-      h += '<div class="who"><b>' + esc(U(e.who.name)) + ', ' + e.who.age + '</b><em>' + esc(t.claimed) + ' ' + esc(U(e.claim)) + '</em><div>' + esc(U(e.key)) + '</div></div>';
-      h += '<span class="tstamp b-' + e.role + '">' + ROLE_EN[e.role] + '</span>';
+      h += '<div class="who"><b>' + esc(U(e.who.name)) + comma() + e.who.age + '</b><em>' + esc(t.claimed) + ' ' + esc(U(e.claim)) + '</em><div>' + esc(U(e.key)) + '</div></div>';
+      h += '<span class="tstamp b-' + e.role + '">' + esc(stampName(e.role)) + '</span>';
       if (H.unresolved) h += '<div class="res"><b class="no">…</b><div>' + esc(t.unresolved) + '</div></div>';
-      else h += '<div class="res"><b class="' + (H.correct ? 'ok' : 'no') + '">' + (H.correct ? '✓ +' + H.pts : '✗ 0') + '</b><div>' + esc(t.youSaid) + ' ' + esc(roleName(H.guess)) + '</div></div>';
+      else h += '<div class="res"><b class="' + (H.correct ? 'ok' : 'no') + '">' + (H.correct ? '✓ +' + H.pts : '✗ 0') + '</b><div>' + esc(t.youSaid) + ' ' + esc(roleName(H.guess, e.who)) + '</div></div>';
       h += '</div>';
     });
     h += '</div><div class="acts"><button class="btn-blue" data-act="gohome"><i class="ph-duotone ph-house"></i> ' + esc(t.home) + '</button><button class="btn-blue" data-act="board">' + esc(t.board) + '</button><button class="btn-blue" data-act="nextplayer">' + esc(t.nextPlayer) + '</button><button class="btn-gold" data-act="again">' + esc(t.playAgain) + '</button></div></div>';
@@ -612,16 +671,16 @@
     const t = T(), list = todayScores();
     let h = bunting() + logo(true) + led(t.live + ' · ' + list.length + ' ' + t.players, 'green');
     h += '<div class="prize-note">' + esc(t.prize) + '</div>';
-    h += '<div class="honour"><h2>' + esc(t.bestToday) + '<span>' + esc(t.bestTodayAr) + '</span></h2>';
+    h += '<div class="honour"><h2>' + esc(t.bestToday) + (t.bestTodayAr ? '<span>' + esc(t.bestTodayAr) + '</span>' : '') + '</h2>';
     if (!list.length) h += '<div class="empty-board">' + esc(t.noScores) + '</div>';
     else {
       h += '<div class="podium">';
       [1, 0, 2].forEach(function (i) {
         const s = list[i];
         const cls = 'pod p' + (i + 1) + (s ? '' : ' empty');
-        const ini = s ? s.name.trim().split(/\s+/).map(function (p) { return p.charAt(0); }).slice(0, 2).join('').toUpperCase() : '';
+        const ini = s ? s.name.trim().split(/\s+/).map(initial).slice(0, 2).join(isArabic(s.name) ? ' ' : '').toUpperCase() : '';
         h += '<div class="' + cls + '"><div class="frame">' + esc(ini) + '<span class="medal">' + (i + 1) + '</span></div>';
-        h += '<div class="nm">' + (s ? esc(s.name) : '&nbsp;') + '</div><div class="jb">' + (s ? esc(t.jobs[s.job] || '') : '&nbsp;') + '</div><div class="sc">' + (s ? s.score : '') + '</div></div>';
+        h += '<div class="nm">' + (s ? esc(s.name) : '&nbsp;') + '</div><div class="jb">' + (s ? esc(t.jobs[s.job] || '') + (s.level ? ' · ' + esc(levelName(s.level)) : '') : '&nbsp;') + '</div><div class="sc">' + (s ? s.score : '') + '</div></div>';
       });
       h += '</div><div class="plates">';
       list.slice(3, 9).forEach(function (s, i) { h += '<div class="plate"><span>' + (i + 4) + '</span><span>' + esc(s.name) + '</span><span class="s">' + s.score + '</span></div>'; });
@@ -643,7 +702,7 @@
   function scrPause() {
     const t = T();
     const base = ({ remote: scrRemote, incoming: scrIncoming, verdict: scrVerdict, counter: scrCounter }[S.prev] || scrCounter)();
-    let h = base + '<div class="dim" style="z-index:12"></div><div class="break-sign" style="z-index:13"><div class="cords"></div><div class="board"><b>' + esc(t.onBreak) + '</b><span>' + esc(t.onBreakAr) + '</span></div><div class="planks">';
+    let h = base + '<div class="dim" style="z-index:12"></div><div class="break-sign" style="z-index:13"><div class="cords"></div><div class="board"><b>' + esc(t.onBreak) + '</b>' + (t.onBreakAr ? '<span>' + esc(t.onBreakAr) + '</span>' : '') + '</div><div class="planks">';
     h += '<button class="plank resume" data-act="resume"><i class="ph-fill ph-play"></i>' + esc(t.resume) + '</button>';
     h += '<button class="plank" data-act="howto"><i class="ph-duotone ph-question"></i>' + esc(t.howToPlay) + '</button>';
     h += '<div class="plank audio-row">' + audioToggles() + '</div>';
@@ -665,7 +724,7 @@
       return '<div class="modal" data-act="closemodal"><div class="card" data-stop="1" style="background:#ece5dd"><button class="close" data-act="closemodal">✕</button><h3' + (S.ui === 'ar' ? ' class="rtl"' : '') + '>' + esc(t.transcript) + ' · ' + esc(U(H.e.who.name)) + '</h3><div class="transcript">' + b + '</div></div></div>';
     }
     if (S.modal && S.modal.confirm) {
-      return '<div class="modal"><div class="card' + (S.ui === 'ar' ? ' rtl' : '') + '" style="width:640px;text-align:center"><p style="font-size:30px">' + esc(S.modal.confirm) + '</p><div style="display:flex;gap:20px;justify-content:center;margin-top:20px"><button class="btn-blue" data-act="closemodal">✕</button><button class="btn-gold" data-act="confirmyes">OK</button></div></div></div>';
+      return '<div class="modal"><div class="card' + (S.ui === 'ar' ? ' rtl' : '') + '" style="width:640px;text-align:center"><p style="font-size:30px">' + esc(S.modal.confirm) + '</p><div style="display:flex;gap:20px;justify-content:center;margin-top:20px"><button class="btn-blue" data-act="closemodal">✕</button><button class="btn-gold" data-act="confirmyes">' + esc(t.ok) + '</button></div></div></div>';
     }
     return '';
   }
@@ -701,7 +760,7 @@
 
   function startShift() {
     S.timeLeft = SHIFT_SECONDS; S.chances = CHANCES; S.score = 0; S.history = []; S.enc = null; S.n = 0;
-    S.used = []; S.lastRoles = []; S.running = true; S.endReason = ''; S.modal = null;
+    S.used = []; S.lastRoles = []; S.running = true; S.endReason = ''; S.modal = null; S.stage = 0; S.levelUpAt = 0;
     nextEncounter();
   }
 
@@ -718,6 +777,7 @@
         if (!S.player.name.trim() || !S.player.job) return;
         SFX.stamp(); S.player.name = S.player.name.trim(); S.screen = 'briefing'; render(); break;
       case 'open': SFX.bell(); startShift(); break;
+      case 'level': S.level = el.getAttribute('data-v'); SFX.bell(); startShift(); break;
       case 'answer': stopRing(); SFX.click(); S.screen = 'remote'; render(); say(L(S.enc.e.open), S.enc.e); break;
       case 'ask': ask(el.getAttribute('data-a')); break;
       case 'moreq': S.enc.offset += (S.screen === 'remote' ? 2 : CHIPS_SHOWN); SFX.click(); render(); break;
@@ -735,7 +795,7 @@
       case 'back': goBack(); break;
       case 'gohome': goHome(); break;
       case 'quit': pendingConfirm = goHome; S.modal = { confirm: T().sureQuit }; render(); break;
-      case 'langtoggle': S.ui = S.ui === 'ar' ? 'en' : 'ar'; savePrefs(); render(); break;
+      case 'langtoggle': S.ui = S.ui === 'ar' ? 'en' : 'ar'; S.vis = S.ui; savePrefs(); render(); break;
       case 'end': pendingConfirm = function () { endShift('early'); }; S.modal = { confirm: T().sureEnd }; render(); break;
       case 'closemodal': S.modal = null; pendingConfirm = null; render(); break;
       case 'confirmyes': { const f = pendingConfirm; pendingConfirm = null; S.modal = null; if (f) f(); else render(); break; }

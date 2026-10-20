@@ -4,7 +4,8 @@ A 3–5 minute fraud-awareness game for **ahlibank** employees on **Omani Youth 
 
 The player signs in with their job title. Visitors then walk up to the counter, phone, email or message them. Each visitor is secretly a **Scammer, Attacker, Stealer or Legal customer**, and the player has to work out which.
 
-- 30 scripted visitors in **English and Arabic**, matched to 9 job titles
+- 30 scripted visitors in **English and Arabic** (Modern Standard Arabic), matched to 9 job titles
+- 3 difficulty levels (**Easy, Medium, Hard**), and every game gets harder as you play
 - In-person visits at the branch or HQ, plus phone calls, WhatsApp, email and internal chat
 - Up to 6 questions per visitor, words you can tap to flag them, and rubber-stamp verdicts
 - 3 chances, a 5-minute shift and a leaderboard
@@ -61,12 +62,22 @@ To change something later, edit the file on GitHub (pencil icon) and commit. The
 ## 3. How to play
 
 1. **Ring the bell**, write your name and tick your post for today.
-2. Read the briefing on the four kinds of visitor.
+2. Read the briefing on the four kinds of visitor, then **choose your level**: Easy, Medium or Hard.
 3. Each visitor talks first. Ask up to **6 questions** using the blue buttons ("Ask for ID", "Call back on file", "Check the system"…). **Other questions** shows more.
    - Checking things (ID, system, call-back) can add evidence to the desk or the record panel.
 4. **Tap suspicious words** to flag them.
 5. **Stamp your verdict**: Scammer, Attacker, Stealer or Legal.
 6. A wrong stamp loses one of your 3 chances. The shift ends at 3 wrong stamps or when the 5-minute clock runs out.
+
+**Levels.** Every 3 visitors the game moves up a stage (a "Level up!" banner appears): trickier visitors, fewer questions and, from Medium up, visitors who give up and leave if you take too long. A visitor who leaves costs a chance.
+
+| | Easy | Medium | Hard |
+| --- | --- | --- | --- |
+| Visitors | clear cases, then trickier | mixed, then expert | trickier, then expert |
+| Questions per visitor (stage 1 → 2 → 3) | 6 → 6 → 5 | 6 → 5 → 4 | 5 → 4 → 3 |
+| Visitor waits | no limit | no limit → 60 s → 45 s | 50 s → 40 s → 30 s |
+| Hints | red-flag words underlined, bad evidence in red | bad evidence in red (stages 1–2) | none, and no red-flag memo |
+| Points | ×1 | ×1.5 | ×2 |
 
 **Points**
 
@@ -77,6 +88,7 @@ To change something later, edit the file on GitHub (pencil icon) and commit. The
 | Checked ID, papers or the system first | +20 |
 | Each real red flag you tapped (up to 3) | +10 |
 | Each chance left at the end | +50 |
+| Difficulty | ×1.5 on Medium, ×2 on Hard, plus 25% per stage |
 
 ---
 
@@ -87,14 +99,16 @@ To change something later, edit the file on GitHub (pencil icon) and commit. The
 | Change, add or remove visitors | `js/encounters.js`. Each visitor is one block: copy one, change the `id` and the text. |
 | Change the questions players can ask | `ACTIONS` at the top of `js/encounters.js` |
 | Change on-screen text (EN / AR) | `js/i18n.js` |
-| Change the shift length, questions or chances | The top of `js/game.js`: `SHIFT_SECONDS`, `MAX_Q`, `CHANCES` |
+| Change the shift length or chances | The top of `js/game.js`: `SHIFT_SECONDS`, `CHANCES` |
+| Change the difficulty levels | `LEVELS` at the top of `js/game.js` (questions, waiting time, hints and points per stage) |
 | Change colours or layout | `css/style.css` |
 | Change the music, office sounds or voices | `js/audio.js` |
 | Change the characters' look | `js/characters.js` (or a visitor's `who.v` settings in `encounters.js`) |
 
 Rules for a visitor block in `encounters.js`:
 
-- Every line is written as `['English', 'Arabic']`.
+- Every line is written as `['English', 'Arabic']`. Write the Arabic in Modern Standard Arabic (فصحى).
+- `level` is `1` (clear case), `2` (trickier) or `3` (expert). It decides at which difficulty and stage the visitor can appear.
 - Wrap a real red flag in `[[double brackets]]`, for example `'I need it [[today]]'`. Players earn points for tapping it.
 - `jobs` lists the job titles that meet this visitor (`guard`, `reception`, `teller`, `hr`, `ceo`, `rm`, `it`, `ops`). "Any employee" meets everyone.
 - `channel` is `person`, `phone`, `whatsapp`, `email` or `internal`.

@@ -111,8 +111,11 @@
     if (v.badge) {
       o += '<path d="M174 330 C178 370 204 394 236 404" stroke="' + lan + '" stroke-width="7" fill="none"/>';
       o += '<path d="M226 330 C232 362 236 384 242 400" stroke="' + lan + '" stroke-width="7" fill="none"/>';
-      const fs = v.badge.length > 7 ? 15 : 19;
-      o += '<g transform="rotate(-6 255 420)"><rect x="208" y="396" width="94" height="60" rx="6" fill="#fff" stroke-width="5"/><rect x="208" y="396" width="94" height="14" fill="' + lan + '" stroke="none"/><text x="255" y="436" text-anchor="middle" font-family="Lalezar, sans-serif" font-size="' + fs + '" fill="' + INK + '" stroke="none">' + v.badge + '</text></g>';
+      // badge text follows the interface language (render() sets <html lang> first)
+      const strings = window.STRINGS && window.STRINGS[document.documentElement.lang];
+      const label = (strings && strings.badges && strings.badges[v.badge]) || v.badge;
+      const fs = label.length > 7 ? 15 : 19;
+      o += '<g transform="rotate(-6 255 420)"><rect x="208" y="396" width="94" height="60" rx="6" fill="#fff" stroke-width="5"/><rect x="208" y="396" width="94" height="14" fill="' + lan + '" stroke="none"/><text x="255" y="436" text-anchor="middle" font-family="Lalezar, sans-serif" font-size="' + fs + '" fill="' + INK + '" stroke="none">' + label + '</text></g>';
     }
     o += '<ellipse cx="110" cy="204" rx="18" ry="26" fill="' + s[0] + '"/><ellipse cx="290" cy="204" rx="18" ry="26" fill="' + s[0] + '"/>';
     o += '<ellipse cx="200" cy="196" rx="92" ry="108" fill="' + s[0] + '"/>';
