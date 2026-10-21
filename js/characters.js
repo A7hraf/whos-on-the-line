@@ -225,6 +225,10 @@
       return '<g transform="rotate(-4 200 410)"><rect x="120" y="356" width="160" height="110" rx="6" fill="#c08a52" stroke-width="5"/><path d="M200 356 L200 466 M120 392 L280 392" stroke="#8a5a2e" stroke-width="5"/><rect x="214" y="404" width="52" height="30" fill="#fbfaf5" stroke-width="3"/></g>' +
         '<ellipse cx="122" cy="410" rx="24" ry="18" fill="' + skin + '"/><ellipse cx="280" cy="404" rx="24" ry="18" fill="' + skin + '"/>';
     }
+    if (p === 'bag') { // dark-navy sports bag with a gold stripe and clasp
+      return '<g transform="rotate(-3 200 414)"><path d="M150 372 C150 344 250 344 250 372" fill="none" stroke-width="7"/><rect x="108" y="366" width="184" height="100" rx="34" fill="#1b2a44" stroke-width="5"/><rect x="110" y="398" width="180" height="16" fill="#c9a31c" stroke="none"/><path d="M108 398 L292 398 M108 414 L292 414" stroke-width="3"/><rect x="186" y="392" width="28" height="28" rx="5" fill="#e6c95a" stroke-width="4"/><circle cx="200" cy="406" r="4" fill="' + INK + '" stroke="none"/></g>' +
+        '<ellipse cx="114" cy="414" rx="24" ry="18" fill="' + skin + '"/><ellipse cx="286" cy="408" rx="24" ry="18" fill="' + skin + '"/>';
+    }
     if (p === 'laptop') {
       return '<g transform="rotate(-3 200 410)"><rect x="118" y="360" width="164" height="100" rx="8" fill="#9aa6b8" stroke-width="5"/><circle cx="200" cy="408" r="10" fill="#fbfaf5" stroke="none"/></g>' +
         '<ellipse cx="122" cy="412" rx="24" ry="18" fill="' + skin + '"/><ellipse cx="280" cy="406" rx="24" ry="18" fill="' + skin + '"/>';

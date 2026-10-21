@@ -4,7 +4,9 @@
  * speech voices, so there are no sound files to download or license.
  *   - Music:   a gentle looping tune in the Hijaz scale with a soft darbuka beat
  *   - Office:  room tone, distant chatter, phones, typing, the queue "ding-dong", printer, footsteps
- *   - Voices:  in-person visitors and phone callers read their lines aloud (if the device has a voice)
+ *   - Voices:  in-person visitors and phone callers read their lines aloud. The device's own voice is
+ *              used first (Microsoft Edge has Omani Arabic voices); if it has no voice for the language,
+ *              the line is streamed from Google's free online text-to-speech instead.
  */
 (function () {
   'use strict';
@@ -311,25 +313,58 @@
   let voices = [];
   function loadVoices() { if (synth) voices = synth.getVoices() || []; }
   if (synth) { loadVoices(); if ('onvoiceschanged' in synth) synth.onvoiceschanged = loadVoices; }
-  const FEMALE = /female|woman|zira|samantha|hazel|susan|salma|hoda|laila|layla|zariyah|aria|jenny|libby|sonia|karen|moira|tessa|fiona|victoria|amina|fatima|mariam|sana|maryam|aysha|aisha|fatma|zeina/i;
-  const MALE = /\bmale\b|\bman\b|david|mark|george|daniel|naayf|hamed|guy|ryan|alex|fred|rishi|tarik|maged|majed|shakir|hamdan|omar|fahed|abdullah/i;
+  const FEMALE = /female|woman|zira|samantha|hazel|susan|salma|hoda|laila|layla|zariyah|aria|jenny|libby|sonia|karen|moira|tessa|fiona|victoria|amina|fatima|mariam|sana|maryam|aysha|aisha|fatma|zeina|amal|noura|mouna|rana|reem|iman/i;
+  const MALE = /\bmale\b|\bman\b|david|mark|george|daniel|naayf|hamed|guy|ryan|alex|fred|rishi|tarik|maged|majed|shakir|hamdan|omar|fahed|abdullah|\bali\b|moaz|bassel|jamal|rami|taim|kareem/i;
   function pickVoice(lang, female) {
     if (!voices.length) loadVoices();
     let list = voices.filter(function (v) { return (v.lang || '').toLowerCase().indexOf(lang) === 0; });
     if (!list.length) return null;
     const gendered = list.filter(function (v) { return (female ? FEMALE : MALE).test(v.name) && !(female ? MALE : FEMALE).test(v.name); });
     if (gendered.length) list = gendered;
-    // prefer natural / online voices, then Gulf Arabic or British English
-    const pref = list.find(function (v) { return /natural|online|neural/i.test(v.name); }) ||
-      list.find(function (v) { return /ar-(om|ae|sa|qa|kw|bh)|en-gb/i.test(v.lang); });
-    return pref || list[0];
+    // Best first: natural/online voices, then Omani, then other Gulf Arabic (or British English)
+    const score = function (v) {
+      return (/natural|online|neural/i.test(v.name) ? 4 : 0) +
+        (/^ar-om/i.test(v.lang) ? 3 : /^ar-(ae|sa|qa|kw|bh)/i.test(v.lang) ? 2 : /^en-gb/i.test(v.lang) ? 1 : 0);
+    };
+    return list.slice().sort(function (a, b) { return score(b) - score(a); })[0];
+  }
+  // ---- Online fallback: Google's free text-to-speech, played through an <audio> element ----
+  let online = null; // the clip that is playing now
+  function chunks(text, max) { // the service takes short texts, so split at sentence or comma breaks
+    const out = []; let cur = '';
+    String(text).split(/(?<=[.!?؟،,…])\s+/).forEach(function (part) {
+      while (part.length > max) { out.push(part.slice(0, max)); part = part.slice(max); }
+      if ((cur + ' ' + part).trim().length > max) { if (cur) out.push(cur); cur = part; } else cur = (cur + ' ' + part).trim();
+    });
+    if (cur) out.push(cur);
+    return out;
+  }
+  function speakOnline(text, lang, female) {
+    const parts = chunks(text, 180);
+    const me = {};
+    online = me;
+    duckMusic = true; applyLevels();
+    const done = function () { if (online === me) { online = null; duckMusic = false; applyLevels(); } };
+    (function next(i) {
+      if (online !== me) return;
+      if (i >= parts.length) { done(); return; }
+      const a = new Audio('https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=' + lang + '&q=' + encodeURIComponent(parts[i]));
+      a.preservesPitch = a.mozPreservesPitch = a.webkitPreservesPitch = false;
+      a.playbackRate = female ? 1.04 : 0.9; // the online voice is female: play men a little lower
+      me.audio = a;
+      a.onended = function () { next(i + 1); };
+      a.onerror = done;
+      const p = a.play(); if (p && p.catch) p.catch(done);
+    })(0);
   }
   function speak(text, lang, who) {
-    if (!on.voices || !synth || !text) return;
+    if (!on.voices || !text) return;
+    // say currency the way people do, not letter by letter
+    text = String(text).replace(/ر\.ع/g, 'ريال عماني').replace(/\bOMR\b/g, 'rials');
     const female = who && (who.base === 'abaya' || who.base === 'shayla');
     const voice = pickVoice(lang, female);
-    if (!voice) return; // no voice for this language on this device: stay silent
     stopSpeech();
+    if (!voice) { speakOnline(String(text).replace(/\[\[|\]\]/g, '').replace(/[“”«»]/g, ''), lang, female); return; }
     const u = new SpeechSynthesisUtterance(String(text).replace(/\[\[|\]\]/g, '').replace(/[“”]/g, ''));
     u.voice = voice; u.lang = voice.lang;
     u.rate = lang === 'ar' ? 0.95 : 1.02;
@@ -342,6 +377,7 @@
   }
   function stopSpeech() {
     if (synth && (synth.speaking || synth.pending)) synth.cancel();
+    if (online) { if (online.audio) online.audio.pause(); online = null; }
     if (duckMusic) { duckMusic = false; applyLevels(); }
   }
 

@@ -16,7 +16,7 @@
   };
   const LEVEL_ORDER = ['easy', 'medium', 'hard'];
   const CHIPS_SHOWN = 3;
-  const ROLES = ['scammer', 'attacker', 'stealer', 'legal'];
+  const ROLES = ['scammer', 'attacker', 'launderer', 'insider', 'legal'];
   const STORE = 'wotl_scores_v1';
   const PREFS = 'wotl_prefs_v1';
 
@@ -401,7 +401,7 @@
   // ---------------- Screens ----------------
   function scrTitle() {
     const t = T();
-    let q = '<div class="queue">' + ['dish', 'polo', 'abaya', 'shayla'].map(function (b) { return '<div>' + window.drawSilhouette(b) + '</div>'; }).join('') + '</div>';
+    let q = '<div class="queue">' + ['dish', 'polo', 'abaya', 'dish', 'shayla'].map(function (b) { return '<div>' + window.drawSilhouette(b) + '</div>'; }).join('') + '</div>';
     let inner = lobby({ noProps: true }) + q + '<div class="tt">' + esc(t.gameTitle) + '</div>' + (t.gameTitleAr ? '<div class="tt-ar">' + esc(t.gameTitleAr) + '</div>' : '') + '<div class="tt-sub">' + esc(t.tagline) + '</div>';
     let h = bunting() + logo(true) + led(t.counterOpen) + '<div class="title-glass">' + windowFrame(inner, 'wide') + '</div>';
     h += '<div class="round-badge"><b>' + esc(t.dateShort) + '</b><span>' + esc(S.ui === 'ar' ? t.youthDayAr : t.youthDay) + '</span>' + (S.ui === 'ar' ? '' : '<small>' + esc(t.youthDayAr) + '</small>') + '</div>';
@@ -455,7 +455,7 @@
 
   function scrBriefing() {
     const t = T();
-    const bases = { scammer: 'dish', attacker: 'polo', stealer: 'abaya', legal: 'shayla' };
+    const bases = { scammer: 'dish', attacker: 'polo', launderer: 'abaya', insider: 'polo', legal: 'shayla' };
     let h = '<div class="cork"></div>' + bunting() + logo();
     h += '<div class="brief-title"><b>' + esc(t.briefTitle) + '</b>' + (t.briefTitleAr ? '<span>' + esc(t.briefTitleAr) + '</span>' : '') + '</div><div class="polaroids">';
     ROLES.forEach(function (r) {
@@ -627,7 +627,7 @@
     let line;
     const roleSpan = '<span class="c-' + e.role + '" style="filter:brightness(1.35)">' + esc(roleName(e.role, e.who)) + '</span>';
     if (S.ui === 'ar') line = esc(t.truth) + ' ' + nm + ': ' + roleSpan + '. ' + esc(U(e.sum));
-    else line = nm + ' ' + (green ? 'was a <span class="c-legal" style="filter:brightness(1.35)">genuine customer</span>.' : 'was ' + (e.role === 'attacker' ? 'an ' : 'a ') + roleSpan + '.') + ' ' + esc(U(e.sum));
+    else line = nm + ' ' + (green ? 'was a <span class="c-legal" style="filter:brightness(1.35)">genuine customer</span>.' : 'was ' + (e.role === 'attacker' || e.role === 'insider' ? 'an ' : 'a ') + roleSpan + '.') + ' ' + esc(U(e.sum));
     h += '<div class="dialog"><div class="tags"><span class="nametag ' + tagCls + '">' + esc(tag) + '</span></div>';
     h += '<p class="line small' + (S.ui === 'ar' ? ' vis-ar' : '') + '" style="top:30px">' + line + '</p>';
     h += '<div class="exitline' + (S.ui === 'ar' ? ' vis-ar' : '') + '">' + nm + ': ' + quote(esc(U(e.exit)), S.ui) + ' ' + (e.exitNote ? '<em>' + esc(U(e.exitNote)) + '</em>' : '') + '</div>';

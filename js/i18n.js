@@ -6,7 +6,7 @@ window.STRINGS = {
     counterOpen: 'COUNTER 03 · OPEN',
     youthDay: 'Youth Day', youthDayAr: 'يوم الشباب العماني', dateShort: '26 OCT', bank: 'AHLIBANK',
     howTitle: 'How to play',
-    howBody: 'Chat with each visitor. Spot the Scammer, Attacker or Stealer — or the genuine customer. 3 chances, 5 minutes.',
+    howBody: 'Chat with each visitor. Spot the Scammer, Attacker, Money launderer or Insider — or the genuine customer. 3 chances, 5 minutes.',
     ringStart: 'Ring to start shift', topToday: 'TOP DETECTIVES<br>TODAY', noScores: 'No scores yet — be the first!',
     happyYD: 'Happy Youth Day!',
     // clock in
@@ -17,7 +17,7 @@ window.STRINGS = {
     timeClock: 'TIME CLOCK', punch: 'punch in to open the counter', clockIn: 'CLOCK IN',
     needName: 'Write your name and tick your post', in: 'IN',
     // briefing
-    briefTitle: 'Training briefing: know your four visitors', briefTitleAr: 'تعرّف على الزوّار',
+    briefTitle: 'Training briefing: know your five visitors', briefTitleAr: 'تعرّف على الزوّار',
     wants: 'Wants:', watch: 'Watch for:',
     r1: 'Chat: ask a few questions', r2: 'Tap words to flag them', r3: 'Stamp your verdict', r4: '3 chances · 5 minutes',
     rWarn: 'Calling every visitor a fraudster loses chances too.',
@@ -68,24 +68,26 @@ window.STRINGS = {
     sureReset: "Delete all of today's scores on this device?", back: 'Back',
     home: 'Welcome page', mainMenu: 'Back to welcome page', sureQuit: 'Leave this shift and go back to the welcome page? This game will not be saved.',
     audioTitle: 'Sound board', music: 'Music', office: 'Office sounds', voices: 'Visitor voices', effects: 'Effects',
-    roleNames: { scammer: 'Scammer', attacker: 'Attacker', stealer: 'Stealer', legal: 'Legal' },
-    roleNamesF: { scammer: 'Scammer', attacker: 'Attacker', stealer: 'Stealer', legal: 'Legal' },
-    roleStamp: { scammer: 'SCAMMER', attacker: 'ATTACKER', stealer: 'STEALER', legal: 'LEGAL' },
+    roleNames: { scammer: 'Scammer', attacker: 'Attacker', launderer: 'Money launderer', insider: 'Insider', legal: 'Legal' },
+    roleNamesF: { scammer: 'Scammer', attacker: 'Attacker', launderer: 'Money launderer', insider: 'Insider', legal: 'Legal' },
+    roleStamp: { scammer: 'SCAMMER', attacker: 'ATTACKER', launderer: 'LAUNDERER', insider: 'INSIDER', legal: 'LEGAL' },
     roleWants: {
       scammer: 'To trick the bank or a customer into moving money.',
       attacker: 'To break into bank systems or staff accounts.',
-      stealer: "To steal a customer's identity or data.",
+      launderer: 'To hide where dirty money came from.',
+      insider: 'A real colleague using their job to break the rules.',
       legal: 'A genuine service.'
     },
     roleWatch: {
       scammer: 'Urgency, emotional pressure, fake papers, "just this once".',
       attacker: 'Passwords, OTPs, USBs, links. Poses as IT or a vendor.',
-      stealer: "Changing phone or email, asking about someone else's account.",
+      launderer: 'Lots of cash, split deposits, no clear source, money in and straight out.',
+      insider: '"Skip the approval", "just between us", sharing passwords or data, favours for family.',
       legal: 'Maybe in a hurry, but answers checks and accepts the process.'
     },
-    memo: ['Rush and pressure', 'Asks for OTP or password', 'New phone or email', '"Just this once"', "Papers don't match"],
+    memo: ['Rush and pressure', 'Asks for OTP or password', 'Cash with no clear source', '"Just between us"', "Papers don't match"],
     memoTitle: 'RED FLAGS!',
-    badges: { VENDOR: 'VENDOR', IT: 'IT', COURIER: 'COURIER', VISITOR: 'VISITOR' },
+    badges: { VENDOR: 'VENDOR', IT: 'IT', COURIER: 'COURIER', VISITOR: 'VISITOR', STAFF: 'STAFF' },
     jobs: {
       guard: 'Security guard', reception: 'Receptionist', teller: 'Customer care / teller', hr: 'HR officer',
       ceo: 'CEO / executive office', rm: 'Relationship manager', it: 'IT / helpdesk', ops: 'Operations / back office', any: 'Any employee'
@@ -97,7 +99,7 @@ window.STRINGS = {
     counterOpen: 'الشبّاك 03 · مفتوح',
     youthDay: 'يوم الشباب', youthDayAr: 'يوم الشباب العُماني', dateShort: '26 أكتوبر', bank: 'البنك الأهلي',
     howTitle: 'طريقة اللعب',
-    howBody: 'حاوِر كلّ زائر، واكشف المحتال أو المخترق أو سارق البيانات، أو تعرّف على العميل الحقيقي. لديك 3 فرص و5 دقائق.',
+    howBody: 'حاوِر كلّ زائر، واكشف المحتال أو المخترق أو غاسل الأموال أو الموظف المخالف، أو تعرّف على العميل الحقيقي. لديك ثلاث فرص وخمس دقائق.',
     ringStart: 'اقرع الجرس لبدء المناوبة', topToday: 'أفضل المحققين<br>اليوم', noScores: 'لا توجد نتائج بعد، كن أول المشاركين!',
     happyYD: 'يوم شباب سعيد!',
     signIn: 'تسجيل المناوبة', signInAr: '',
@@ -106,9 +108,9 @@ window.STRINGS = {
     fictional: 'جميع الزوّار شخصيات خيالية. لا تستخدم بيانات عملاء حقيقية أبدًا.',
     timeClock: 'ساعة الحضور', punch: 'سجّل حضورك لفتح الشبّاك', clockIn: 'تسجيل الحضور',
     needName: 'اكتب اسمك واختر موقع عملك', in: 'دخول',
-    briefTitle: 'إحاطة تدريبية: تعرّف على زوّارك الأربعة', briefTitleAr: '',
+    briefTitle: 'إحاطة تدريبية: تعرّف على زوّارك الخمسة', briefTitleAr: '',
     wants: 'هدفه:', watch: 'انتبه إلى:',
-    r1: 'حاوِر الزائر واطرح بعض الأسئلة', r2: 'اضغط على الكلمات المريبة', r3: 'اختم حكمك', r4: 'لديك 3 فرص و5 دقائق',
+    r1: 'حاوِر الزائر واطرح بعض الأسئلة', r2: 'اضغط على الكلمات المريبة', r3: 'اختم حكمك', r4: 'ثلاث فرص · خمس دقائق',
     rWarn: 'من يتّهم كلّ الزوّار بالاحتيال يخسر فرصه أيضًا.',
     points: 'النقاط', pts1: 'حكم صحيح +100', pts2: 'حكم خلال 3 أسئلة +50', pts3: 'التحقق من الهوية أو المستندات +20',
     pts4: 'كل علامة خطر تكتشفها +10 · كل فرصة متبقية +50',
@@ -150,24 +152,26 @@ window.STRINGS = {
     sureReset: 'هل تريد حذف جميع نتائج اليوم من هذا الجهاز؟', back: 'رجوع',
     home: 'الصفحة الرئيسية', mainMenu: 'العودة إلى الصفحة الرئيسية', sureQuit: 'هل تريد مغادرة المناوبة والعودة إلى الصفحة الرئيسية؟ لن تُحفَظ هذه الجولة.',
     audioTitle: 'لوحة الصوت', music: 'الموسيقى', office: 'أصوات المكتب', voices: 'أصوات الزوّار', effects: 'المؤثرات',
-    roleNames: { scammer: 'محتال', attacker: 'مخترق', stealer: 'سارق بيانات', legal: 'عميل حقيقي' },
-    roleNamesF: { scammer: 'محتالة', attacker: 'مخترقة', stealer: 'سارقة بيانات', legal: 'عميلة حقيقية' },
-    roleStamp: { scammer: 'محتال', attacker: 'مخترق', stealer: 'سارق بيانات', legal: 'عميل حقيقي' },
+    roleNames: { scammer: 'محتال', attacker: 'مخترق', launderer: 'غاسل أموال', insider: 'موظف مخالف', legal: 'عميل حقيقي' },
+    roleNamesF: { scammer: 'محتالة', attacker: 'مخترقة', launderer: 'غاسلة أموال', insider: 'موظفة مخالفة', legal: 'عميلة حقيقية' },
+    roleStamp: { scammer: 'محتال', attacker: 'مخترق', launderer: 'غاسل أموال', insider: 'موظف مخالف', legal: 'عميل حقيقي' },
     roleWants: {
       scammer: 'خداع البنك أو العميل لتحويل الأموال.',
       attacker: 'اختراق أنظمة البنك أو حسابات الموظفين.',
-      stealer: 'سرقة هوية العميل أو بياناته.',
+      launderer: 'إخفاء مصدر أموال مشبوهة.',
+      insider: 'زميل حقيقي يستغلّ وظيفته لمخالفة القواعد.',
       legal: 'الحصول على خدمة حقيقية.'
     },
     roleWatch: {
       scammer: 'الاستعجال، والضغط العاطفي، والمستندات المزوّرة، وعبارة "هذه المرة فقط".',
       attacker: 'طلب كلمات المرور ورموز التحقق، وأجهزة USB، والروابط، وانتحال صفة فريق التقنية أو المورّدين.',
-      stealer: 'تغيير رقم الهاتف أو البريد الإلكتروني، والسؤال عن حساب شخص آخر.',
+      launderer: 'نقود كثيرة، وإيداعات مقسّمة، ومصدر غير واضح، وأموال تدخل وتخرج بسرعة.',
+      insider: 'عبارات مثل "تجاوز الموافقة" و"بيني وبينك"، ومشاركة كلمات المرور أو البيانات، وخدمات للأقارب.',
       legal: 'قد يكون مستعجلًا، لكنه يجيب عن أسئلة التحقق ويلتزم بالإجراءات.'
     },
-    memo: ['الاستعجال والضغط', 'طلب رمز التحقق أو كلمة المرور', 'رقم هاتف أو بريد جديد', 'عبارة "هذه المرة فقط"', 'مستندات غير متطابقة'],
+    memo: ['الاستعجال والضغط', 'طلب رمز التحقق أو كلمة المرور', 'نقود بلا مصدر واضح', 'عبارة "بيني وبينك"', 'مستندات غير متطابقة'],
     memoTitle: 'علامات الخطر!',
-    badges: { VENDOR: 'مورّد', IT: 'تقنية', COURIER: 'مندوب', VISITOR: 'زائر' },
+    badges: { VENDOR: 'مورّد', IT: 'تقنية', COURIER: 'مندوب', VISITOR: 'زائر', STAFF: 'موظف' },
     jobs: {
       guard: 'حارس أمن', reception: 'موظف استقبال', teller: 'خدمة العملاء / أمين الصندوق', hr: 'موظف الموارد البشرية',
       ceo: 'الرئيس التنفيذي / المكتب التنفيذي', rm: 'مدير علاقات العملاء', it: 'تقنية المعلومات / الدعم الفني', ops: 'العمليات / المكتب الخلفي', any: 'أي موظف'
@@ -175,6 +179,6 @@ window.STRINGS = {
   }
 };
 // English role names in stamps (always shown with Arabic underneath in the English interface)
-window.ROLE_EN = { scammer: 'SCAMMER', attacker: 'ATTACKER', stealer: 'STEALER', legal: 'LEGAL' };
-window.ROLE_AR = { scammer: 'محتال', attacker: 'مخترق', stealer: 'سارق بيانات', legal: 'عميل حقيقي' };
+window.ROLE_EN = { scammer: 'SCAMMER', attacker: 'ATTACKER', launderer: 'LAUNDERER', insider: 'INSIDER', legal: 'LEGAL' };
+window.ROLE_AR = { scammer: 'محتال', attacker: 'مخترق', launderer: 'غاسل أموال', insider: 'موظف مخالف', legal: 'عميل حقيقي' };
 window.JOB_ORDER = ['guard', 'reception', 'teller', 'hr', 'ceo', 'rm', 'it', 'ops', 'any'];

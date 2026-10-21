@@ -2,9 +2,19 @@
 
 A 3–5 minute fraud-awareness game for **ahlibank** employees on **Omani Youth Day (26 October 2026)**.
 
-The player signs in with their job title. Visitors then walk up to the counter, phone, email or message them. Each visitor is secretly a **Scammer, Attacker, Stealer or Legal customer**, and the player has to work out which.
+The player signs in with their job title. Visitors then walk up to the counter, phone, email or message them. Each visitor is secretly a **Scammer, Attacker, Money launderer, Insider or Legal customer**, and the player has to work out which.
 
-- 30 scripted visitors in **English and Arabic** (Modern Standard Arabic), matched to 9 job titles
+- 63 scripted visitors in **English and Arabic**, matched to 9 job titles
+- 5 hidden roles:
+
+| Role | What they want |
+| --- | --- |
+| Scammer · محتال | To trick the bank or a customer into moving money |
+| Attacker · مخترق | To break into bank systems or staff accounts |
+| Money launderer · غاسل أموال | To hide where dirty money came from |
+| Insider · موظف مخالف | A real colleague using their job to break the rules |
+| Legal · عميل حقيقي | A genuine service |
+
 - 3 difficulty levels (**Easy, Medium, Hard**), and every game gets harder as you play
 - In-person visits at the branch or HQ, plus phone calls, WhatsApp, email and internal chat
 - Up to 6 questions per visitor, words you can tap to flag them, and rubber-stamp verdicts
@@ -53,20 +63,20 @@ To change something later, edit the file on GitHub (pencil icon) and commit. The
 
 **The leaderboard lives on each device** (browser storage). With 2–3 laptops, export the CSV from each one at the end of the day to pick the overall winners. A shared live leaderboard across devices would need a small online database; it isn't included in the free version.
 
-**Visitor voices** use the voices built into the laptop's browser. For English, Chrome and Edge always have one. For Arabic, use **Microsoft Edge**, which includes Omani and Gulf Arabic voices; if a laptop has no Arabic voice, Arabic visitors simply stay silent.
+**Visitor voices** use the voices built into the laptop's browser. For English, Chrome and Edge always have one. For Arabic, **Microsoft Edge** is best: it includes natural Omani Arabic voices. If a laptop has no Arabic voice (common in Chrome on Windows), the game streams the Arabic lines from Google's free online text-to-speech instead, so it needs internet; this is an unofficial service and a company network may block `translate.google.com`.
 
-**Internet:** the game needs internet once to load its fonts and icons from Google Fonts and unpkg. Without internet it still works, just with plain fonts. Ask IT to allow `github.io`, `fonts.googleapis.com`, `fonts.gstatic.com` and `unpkg.com`.
+**Internet:** the game needs internet once to load its fonts and icons from Google Fonts and unpkg. Without internet it still works, just with plain fonts. Ask IT to allow `github.io`, `fonts.googleapis.com`, `fonts.gstatic.com`, `unpkg.com` and (for Arabic voices in Chrome) `translate.google.com`.
 
 ---
 
 ## 3. How to play
 
 1. **Ring the bell**, write your name and tick your post for today.
-2. Read the briefing on the four kinds of visitor, then **choose your level**: Easy, Medium or Hard.
+2. Read the briefing on the five kinds of visitor, then **choose your level**: Easy, Medium or Hard.
 3. Each visitor talks first. Ask up to **6 questions** using the blue buttons ("Ask for ID", "Call back on file", "Check the system"…). **Other questions** shows more.
    - Checking things (ID, system, call-back) can add evidence to the desk or the record panel.
 4. **Tap suspicious words** to flag them.
-5. **Stamp your verdict**: Scammer, Attacker, Stealer or Legal.
+5. **Stamp your verdict**: Scammer, Attacker, Launderer, Insider or Legal.
 6. A wrong stamp loses one of your 3 chances. The shift ends at 3 wrong stamps or when the 5-minute clock runs out.
 
 **Levels.** Every 3 visitors the game moves up a stage (a "Level up!" banner appears): trickier visitors, fewer questions and, from Medium up, visitors who give up and leave if you take too long. A visitor who leaves costs a chance.
@@ -107,7 +117,9 @@ To change something later, edit the file on GitHub (pencil icon) and commit. The
 
 Rules for a visitor block in `encounters.js`:
 
-- Every line is written as `['English', 'Arabic']`. Write the Arabic in Modern Standard Arabic (فصحى).
+- Every line is written as `['English', 'Arabic']`.
+- Arabic: what the visitor **says** (`open`, the replies in `acts`, `exit`) is natural Gulf/Omani dialect. Everything the game narrates (`claim`, `arrive`, `card`, `reveal`, `flags`, `key`, `sum`, `exitNote`, `line`) is Modern Standard Arabic (فصحى).
+- `role` is `scammer`, `attacker`, `launderer`, `insider` or `legal`. Non-legal visitors need at least 3 `[[red flags]]`; legal visitors have none.
 - `level` is `1` (clear case), `2` (trickier) or `3` (expert). It decides at which difficulty and stage the visitor can appear.
 - Wrap a real red flag in `[[double brackets]]`, for example `'I need it [[today]]'`. Players earn points for tapping it.
 - `jobs` lists the job titles that meet this visitor (`guard`, `reception`, `teller`, `hr`, `ceo`, `rm`, `it`, `ops`). "Any employee" meets everyone.
@@ -122,8 +134,9 @@ Rules for a visitor block in `encounters.js`:
 index.html          the page
 css/style.css       the Teller's Window look (1600×900 stage, scales to any screen)
 js/i18n.js          interface text, English + Arabic
-js/characters.js    the four hand-drawn characters with colour/prop variants
-js/encounters.js    the 30 visitors and the question list
+js/characters.js    the four hand-drawn character bodies with colour/prop variants
+js/encounters.js    the 63 visitors and the question list
+tools/check-visitors.js   checks every visitor (run: node tools/check-visitors.js)
 js/game.js          game logic, screens, scoring, leaderboard, sound effects
 js/audio.js         background music, office ambience, visitor voices (no sound files)
 assets/             ahlibank logo
